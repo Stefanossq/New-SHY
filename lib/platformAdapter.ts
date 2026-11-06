@@ -3,6 +3,7 @@
  * Transparently handles local disk file writes when running as a desktop app (.exe),
  * and standard JSZip/browser downloads when running inside a web browser.
  */
+import { sanitizeRelativePath, base64ToBytes } from "./utils";
 
 export interface ExportResult {
   success: boolean;
@@ -63,13 +64,29 @@ export class PlatformAdapter {
             };
           }
 
-          const targetDir = `${selectedDir}/${slug || 'projeto'}`;
-          // Write all files directly to local disk
-          if (files && typeof files === "object") {
-            for (const [relativePath, content] of Object.entries(files)) {
-              const fileString = typeof content === "string" ? content : (content?.base64 || "");
-              const fullFilePath = `${targetDir}/${relativePath}`;
-              await tauri.fs.writeTextFile(fullFilePath, fileString);
+          const safeSlug = sanitizeRelativePath(slug || "projeto") || "projeto";
+          const targetDir = `${selectedDir}/${safeSlug}`;
+
+          // Consistency: validate the whole file set before touching the disk, so an
+          // unsafe path (e.g. "../../etc") aborts the export instead of half-writing it.
+          const plan: Array<{ path: string; content: unknown }> = [];
+          for (const [relativePath, content] of Object.entries(files || {})) {
+            if (relativePath.endsWith(".placeholder")) continue;
+            const safe = sanitizeRelativePath(relativePath);
+            if (!safe) throw new Error(`Caminho inseguro bloqueado: ${relativePath}`);
+            plan.push({ path: `${targetDir}/${safe}`, content });
+          }
+
+          for (const { path, content } of plan) {
+            const dir = path.slice(0, path.lastIndexOf("/"));
+            if (tauri.fs.mkdir) await tauri.fs.mkdir(dir, { recursive: true });
+            if (typeof content === "string") {
+              await tauri.fs.writeTextFile(path, content);
+            } else if (content && typeof (content as any).base64 === "string") {
+              // Binary assets (images) must be written as bytes — writing the base64 text corrupted them.
+              const bytes = base64ToBytes((content as any).base64);
+              if (tauri.fs.writeFile) await tauri.fs.writeFile(path, bytes);
+              else await tauri.fs.writeTextFile(path, (content as any).base64);
             }
           }
 

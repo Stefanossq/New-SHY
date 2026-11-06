@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Key, Shield, Check, AlertCircle, Loader2, X, Eye, EyeOff, Trash2 } from 'lucide-react';
 import { AIService } from '../lib/aiService';
+import { Dialog as DialogPrimitive } from 'radix-ui';
+import { ConfirmDialog } from './ui/dialog';
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -21,6 +23,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [hasExistingKey, setHasExistingKey] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -118,7 +121,6 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   };
 
   const handleDelete = async () => {
-    if (!confirm('Deseja realmente remover a chave de API do cofre seguro?')) return;
     try {
       await AIService.deleteApiKey();
       setHasExistingKey(false);
@@ -136,8 +138,14 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in font-sans">
-      <div className="bg-[#0D131F] border border-gray-800 rounded-xl max-w-md w-full overflow-hidden shadow-2xl relative text-xs">
+    <DialogPrimitive.Root open={isOpen} onOpenChange={(open) => !open && !isMandatory && onClose()}>
+      <DialogPrimitive.Portal>
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm data-[state=open]:animate-overlay-in" />
+      <DialogPrimitive.Content
+        // A mandatory first-run key cannot be dismissed with Esc / outside click.
+        onEscapeKeyDown={(e) => isMandatory && e.preventDefault()}
+        onPointerDownOutside={(e) => isMandatory && e.preventDefault()}
+        className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 bg-[#0D131F] border border-gray-800 rounded-xl overflow-hidden shadow-2xl text-xs data-[state=open]:animate-content-in focus:outline-none">
         {/* Header */}
         <div className="p-5 border-b border-gray-800 flex justify-between items-center bg-gray-950">
           <div className="flex items-center gap-3">
@@ -145,17 +153,18 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               <Key className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
+              <DialogPrimitive.Title className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
                 <span>Configurar Chave Gemini (BYOK)</span>
-              </h3>
-              <p className="text-[11px] text-gray-400">
+              </DialogPrimitive.Title>
+              <DialogPrimitive.Description className="text-[11px] text-gray-400">
                 Modelo Desktop Seguro · Windows Credential Manager
-              </p>
+              </DialogPrimitive.Description>
             </div>
           </div>
           {!isMandatory && (
             <button
               onClick={onClose}
+              aria-label="Fechar"
               className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
@@ -206,7 +215,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               {hasExistingKey && (
                 <button
                   type="button"
-                  onClick={handleDelete}
+                  onClick={() => setConfirmDelete(true)}
                   className="text-[11px] text-red-400 hover:text-red-300 flex items-center gap-1 cursor-pointer hover:underline"
                 >
                   <Trash2 className="w-3 h-3" />
@@ -255,7 +264,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 <button
                   type="button"
                   disabled={testing || saving}
-                  onClick={handleDelete}
+                  onClick={() => setConfirmDelete(true)}
                   className="px-3 py-2 rounded-lg border border-red-500/20 hover:border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-red-200 transition-colors cursor-pointer flex items-center gap-1.5 font-medium text-[11px]"
                   title="Remove a credencial armazenada no Windows Credential Manager"
                 >
@@ -287,7 +296,17 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Remover chave de API?"
+        description="A chave será apagada do Windows Credential Manager. Você poderá cadastrá-la novamente depois."
+        confirmLabel="Remover chave"
+        destructive
+        onConfirm={() => void handleDelete()}
+      />
+    </DialogPrimitive.Root>
   );
 };

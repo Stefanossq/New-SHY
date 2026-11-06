@@ -4,8 +4,7 @@ import {
   ShoppingCart, Star, Trash, Heart, MessageSquare, Send, Calendar, 
   MapPin, Map, CheckCircle2, User, Search, RefreshCw, Sparkles, CreditCard, X, ShieldCheck
 } from 'lucide-react';
-import { GoogleGenAI } from '@google/genai';
-import { getAIConfig } from '../lib/aiService';
+import { PlatformAdapter } from '../lib/platformAdapter';
 
 interface LivePreviewProps {
   projectType: ProjectType;
@@ -938,36 +937,35 @@ const TravelPreview: React.FC<{ files: Record<string, any> }> = ({ files }) => {
     setMessages(prev => [...prev, { sender: 'user', text: userMsg }]);
     setIsTyping(true);
 
-    // Call actual Gemini API if configured!
-    const config = getAIConfig();
-    if (config.geminiKey) {
+    // Server-side proxy keeps the API key off the client bundle (web/dev mode).
+    if (!PlatformAdapter.isTauriApp()) {
       try {
-        const ai = new GoogleGenAI({ apiKey: config.geminiKey });
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.5-flash',
-          contents: `Você é um guia de viagens profissional e inteligente especializado no planejamento de roteiros de alta performance. O usuário perguntou sobre um roteiro de viagem: "${userMsg}". Responda de forma sucinta e calorosa, dando 2 dicas de passeios ou gastronomia. Responda em português (pt-BR).`,
+        const res = await fetch('/api/ai/travel-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: userMsg }),
         });
-        const reply = response.text || 'Desculpe, tive um contratempo para acessar as informações.';
-        setMessages(prev => [...prev, { sender: 'assistant', text: reply }]);
-      } catch (err: any) {
-        console.warn("Gemini guide failure:", err);
-        setMessages(prev => [...prev, { sender: 'assistant', text: `Recebi seu roteiro com sucesso! Excelente escolha para sua viagem.` }]);
-      } finally {
-        setIsTyping(false);
-      }
-    } else {
-      // Offline fallback with smart timeout simulation
-      setTimeout(() => {
-        let reply = 'Adorei a sua colocação! Recomendo fortemente consultar as opções do Mercado Colonial ou esticar um jantar à beira-rio no Bistrô das Oliveiras.';
-        if (userMsg.toLowerCase().includes('preço') || userMsg.toLowerCase().includes('custo') || userMsg.toLowerCase().includes('caro')) {
-          reply = 'O roteiro foi formatado para oferecer opções democráticas: desde trilhas 100% gratuitas em contato com a flora local, até bistrôs refinados a preço justo.';
-        } else if (userMsg.toLowerCase().includes('restaurante') || userMsg.toLowerCase().includes('comer') || userMsg.toLowerCase().includes('fome')) {
-          reply = 'Seu roteiro gastronômico conta com o Bistrô das Oliveiras (Dia 1) e o Restaurante da Praia Seca (Dia 2) – ambos referências na curadoria de pratos típicos.';
+        const data = res.ok ? await res.json() : null;
+        if (data?.reply) {
+          setMessages(prev => [...prev, { sender: 'assistant', text: data.reply }]);
+          setIsTyping(false);
+          return;
         }
-        setMessages(prev => [...prev, { sender: 'assistant', text: reply }]);
-        setIsTyping(false);
-      }, 1000);
+      } catch (err) {
+        console.warn('Travel guide endpoint unavailable, using offline reply:', err);
+      }
     }
+    // Offline fallback with smart timeout simulation
+    setTimeout(() => {
+      let reply = 'Adorei a sua colocação! Recomendo fortemente consultar as opções do Mercado Colonial ou esticar um jantar à beira-rio no Bistrô das Oliveiras.';
+      if (userMsg.toLowerCase().includes('preço') || userMsg.toLowerCase().includes('custo') || userMsg.toLowerCase().includes('caro')) {
+        reply = 'O roteiro foi formatado para oferecer opções democráticas: desde trilhas 100% gratuitas em contato com a flora local, até bistrôs refinados a preço justo.';
+      } else if (userMsg.toLowerCase().includes('restaurante') || userMsg.toLowerCase().includes('comer') || userMsg.toLowerCase().includes('fome')) {
+        reply = 'Seu roteiro gastronômico conta com o Bistrô das Oliveiras (Dia 1) e o Restaurante da Praia Seca (Dia 2) – ambos referências na curadoria de pratos típicos.';
+      }
+      setMessages(prev => [...prev, { sender: 'assistant', text: reply }]);
+      setIsTyping(false);
+    }, 1000);
   };
 
   return (

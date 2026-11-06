@@ -29,9 +29,13 @@ export interface AIProduct {
  */
 export const createConvexProductsContent = (products: AIProduct[], imagePaths: string[]): string => {
     const initialProductsString = products.map((p, index) => {
-        const escapeJS = (str: string) => str.replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r');
-        const imageUrl = imagePaths[index] || 'https://placehold.co/300x300/1f2937/d1d5db?text=Imagem+Indisponivel';
-        return `            { name: '${escapeJS(p.name)}', price: ${p.price.toFixed(2)}, description: '${escapeJS(p.description)}', category: '${escapeJS(p.category)}', stock: ${p.stock}, imageUrl: '${imageUrl}' }`;
+        // Escape backslashes FIRST — otherwise a "\" in AI output breaks the generated module.
+        const escapeJS = (str: unknown) =>
+            String(str ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+        const imageUrl = escapeJS(imagePaths[index] || 'https://placehold.co/300x300/1f2937/d1d5db?text=Imagem+Indisponivel');
+        const price = (Number(p.price) || 0).toFixed(2);
+        const stock = Math.max(0, Math.trunc(Number(p.stock) || 0));
+        return `            { name: '${escapeJS(p.name)}', price: ${price}, description: '${escapeJS(p.description)}', category: '${escapeJS(p.category)}', stock: ${stock}, imageUrl: '${imageUrl}' }`;
     }).join(',\n');
 
     return `import { query, mutation } from "./_generated/server";

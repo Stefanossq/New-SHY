@@ -1,123 +1,167 @@
 import React from 'react';
-import { CheckCircle2, Loader2, AlertCircle, Cpu, HardDrive } from 'lucide-react';
+import { CheckCircle2, Loader2, AlertCircle, Cpu, RotateCcw, ArrowLeft, Sliders } from 'lucide-react';
+import { cn } from '../lib/cn';
+import { Button } from './ui/button';
 
 interface GenerationScreenProps {
   projectName: string;
   lifecycleSteps: string[];
+  /** Index of the step currently running; equals `lifecycleSteps.length` when all are done. */
   currentStepIndex: number;
+  /** Live message from the engine for the running step. */
+  activity?: string;
   errorDetail?: string | null;
+  onRetry?: () => void;
+  onBack?: () => void;
+  onOpenSettings?: () => void;
 }
+
+export const computeProgress = (currentStepIndex: number, total: number): number =>
+  total <= 0 ? 0 : Math.min(100, Math.max(0, Math.round((currentStepIndex / total) * 100)));
 
 const GenerationScreen: React.FC<GenerationScreenProps> = ({
   projectName,
   lifecycleSteps,
   currentStepIndex,
+  activity,
   errorDetail,
+  onRetry,
+  onBack,
+  onOpenSettings,
 }) => {
-  const total = lifecycleSteps.length || 1;
-  const progressPercent = Math.min(100, Math.round(((currentStepIndex) / total) * 100));
+  const total = lifecycleSteps.length;
+  const progress = computeProgress(currentStepIndex, total);
+  const finished = total > 0 && currentStepIndex >= total;
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 md:p-8 w-full max-w-xl mx-auto shadow-2xl animate-fade-in space-y-6">
-      
-      {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-gray-800">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
-            <Cpu className="w-5 h-5 animate-pulse" />
+    <section
+      aria-labelledby="generation-title"
+      className="mx-auto w-full max-w-2xl space-y-6 rounded-2xl border border-gray-800 bg-gray-900/80 p-6 shadow-2xl shadow-black/30 md:p-8"
+    >
+      <header className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div
+            className={cn(
+              'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border',
+              errorDetail
+                ? 'border-red-500/30 bg-red-500/10 text-red-400'
+                : finished
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                  : 'border-cyan-500/30 bg-cyan-500/10 text-cyan-400'
+            )}
+          >
+            {errorDetail ? <AlertCircle className="h-5 w-5" /> : finished ? <CheckCircle2 className="h-5 w-5" /> : <Cpu className="h-5 w-5 animate-pulse" />}
           </div>
-          <div>
-            <h3 className="text-base font-bold text-white">
-              Compondo Projeto
-            </h3>
-            <p className="text-xs text-gray-400">
-              {projectName}
-            </p>
+          <div className="min-w-0">
+            <h2 id="generation-title" className="text-base font-bold text-white">
+              {errorDetail ? 'A geração falhou' : finished ? 'Projeto pronto!' : 'Compondo seu projeto'}
+            </h2>
+            <p className="truncate text-xs text-gray-400">{projectName}</p>
           </div>
         </div>
-
-        <div className="text-right font-mono text-xs text-cyan-400 font-bold">
-          {progressPercent}%
+        <div className="font-mono text-2xl font-bold tabular-nums text-cyan-300" aria-hidden>
+          {progress}%
         </div>
-      </div>
+      </header>
 
-      {/* Progress Bar */}
-      <div className="w-full bg-gray-950 h-1.5 rounded-full overflow-hidden border border-gray-800">
+      <div
+        role="progressbar"
+        aria-label="Progresso da geração"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progress}
+        className="relative h-2 w-full overflow-hidden rounded-full bg-gray-950"
+      >
         <div
-          className="bg-gradient-to-r from-cyan-500 to-blue-500 h-full transition-all duration-300 ease-out"
-          style={{ width: `${progressPercent}%` }}
+          className={cn(
+            'h-full rounded-full transition-[width] duration-500 ease-out',
+            errorDetail ? 'bg-red-500' : 'bg-gradient-to-r from-cyan-400 via-sky-500 to-blue-600'
+          )}
+          style={{ width: `${Math.max(progress, 3)}%` }}
         />
+        {!errorDetail && !finished && (
+          <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+        )}
       </div>
 
-      {/* Steps List */}
-      <div className="space-y-2.5">
+      {/* Screen readers hear each new activity without having to re-scan the list. */}
+      <p aria-live="polite" className="min-h-[1rem] truncate font-mono text-[11px] text-gray-500">
+        {errorDetail ? '' : activity}
+      </p>
+
+      <ol className="space-y-1.5">
         {lifecycleSteps.map((step, index) => {
           const isCompleted = index < currentStepIndex;
           const isActive = index === currentStepIndex && !errorDetail;
-          const isFailed = index === currentStepIndex && errorDetail;
-          const isPending = index > currentStepIndex;
-
+          const isFailed = index === currentStepIndex && Boolean(errorDetail);
           return (
-            <div
-              key={index}
-              className={`flex items-center gap-3 p-2.5 rounded-lg text-xs transition-colors ${
-                isActive
-                  ? 'bg-cyan-950/30 border border-cyan-800/40 text-cyan-300'
-                  : isFailed
-                  ? 'bg-red-950/30 border border-red-800/40 text-red-300'
-                  : isCompleted
-                  ? 'text-gray-300'
-                  : 'text-gray-600'
-              }`}
+            <li
+              key={step}
+              className={cn(
+                'flex items-center gap-3 rounded-lg border px-3 py-2 text-xs transition-colors',
+                isActive && 'border-cyan-800/50 bg-cyan-950/30 text-cyan-200',
+                isFailed && 'border-red-800/50 bg-red-950/30 text-red-300',
+                isCompleted && 'border-transparent text-gray-300',
+                !isActive && !isFailed && !isCompleted && 'border-transparent text-gray-600'
+              )}
             >
-              <div className="shrink-0">
+              <span className="shrink-0">
                 {isCompleted ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
                 ) : isActive ? (
-                  <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin text-cyan-400" />
                 ) : isFailed ? (
-                  <AlertCircle className="w-4 h-4 text-red-400" />
+                  <AlertCircle className="h-4 w-4 text-red-400" />
                 ) : (
-                  <div className="w-4 h-4 rounded-full border border-gray-700 flex items-center justify-center text-[10px] text-gray-600">
-                    {index + 1}
-                  </div>
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full border border-gray-700 text-[9px]">{index + 1}</span>
                 )}
-              </div>
-
-              <span className={`font-medium truncate ${isActive ? 'font-semibold' : ''}`}>
-                {step}
               </span>
-            </div>
+              <span className={cn('truncate', isActive && 'font-semibold')}>{step}</span>
+            </li>
           );
         })}
-      </div>
+      </ol>
 
-      {/* Error View */}
       {errorDetail && (
-        <div className="p-4 bg-red-950/40 border border-red-900/50 rounded-lg text-xs text-red-300 space-y-2">
-          <div className="flex items-center gap-2 font-bold text-red-400">
-            <AlertCircle className="w-4 h-4" />
-            <span>Falha na orquestração</span>
+        <div role="alert" className="space-y-3 rounded-xl border border-red-900/50 bg-red-950/30 p-4 text-xs text-red-200">
+          <p className="break-words font-mono text-[11px] opacity-90">{errorDetail}</p>
+          <p className="text-[11px] text-gray-400">
+            Seus créditos desta tentativa foram <strong className="text-gray-200">estornados automaticamente</strong>. Sem chave de API? Use o
+            modo offline (Mock) nas configurações.
+          </p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            {onRetry && (
+              <Button variant="primary" onClick={onRetry}>
+                <RotateCcw /> Tentar novamente
+              </Button>
+            )}
+            {onOpenSettings && (
+              <Button variant="secondary" onClick={onOpenSettings}>
+                <Sliders /> Configurar provedor
+              </Button>
+            )}
+            {onBack && (
+              <Button variant="ghost" onClick={onBack}>
+                <ArrowLeft /> Voltar ao início
+              </Button>
+            )}
           </div>
-          <p className="font-mono text-[11px] opacity-90 break-words">
-            {errorDetail}
-          </p>
-          <p className="text-[11px] text-gray-400 pt-1">
-            Dica: Ative o <strong>Modo Demo Offline (Mock)</strong> no menu de configurações do topo para testar sem chave de API.
-          </p>
         </div>
       )}
 
-      {/* Output indicator */}
-      <div className="pt-2 border-t border-gray-800/80 flex items-center justify-between text-[11px] text-gray-500 font-mono">
-        <div className="flex items-center gap-1.5">
-          <HardDrive className="w-3.5 h-3.5 text-gray-400" />
-          <span>Pipeline de Scaffolding em Execução</span>
-        </div>
-        <span>Etapa {Math.min(currentStepIndex + 1, total)} / {total}</span>
-      </div>
-
-    </div>
+      {!errorDetail && (
+        <footer className="flex items-center justify-between border-t border-gray-800 pt-3 text-[11px] text-gray-500">
+          <span>
+            Etapa {Math.min(currentStepIndex + 1, Math.max(total, 1))} de {Math.max(total, 1)}
+          </span>
+          {onBack && !finished && (
+            <button type="button" onClick={onBack} className="text-gray-400 underline-offset-2 hover:text-white hover:underline cursor-pointer">
+              Cancelar e estornar créditos
+            </button>
+          )}
+        </footer>
+      )}
+    </section>
   );
 };
 

@@ -10,7 +10,35 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "1mb" }));
+
+const MAX_PROMPT_INPUT = 200;
+/** Trims and caps user-provided prompt fragments (cost control + prompt-injection surface reduction). */
+const cleanInput = (value: unknown, fallback: string): string => {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, MAX_PROMPT_INPUT);
+  return trimmed || fallback;
+};
+
+// Minimal fixed-window rate limiter for the AI endpoints (protects the server-side API key quota).
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX = 30;
+const hits = new Map<string, { count: number; resetAt: number }>();
+const rateLimit: express.RequestHandler = (req, res, next) => {
+  const key = req.ip || "anon";
+  const now = Date.now();
+  const entry = hits.get(key);
+  if (!entry || entry.resetAt <= now) {
+    hits.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return next();
+  }
+  if (++entry.count > RATE_MAX) {
+    res.setHeader("Retry-After", Math.ceil((entry.resetAt - now) / 1000).toString());
+    return res.status(429).json({ error: "Muitas requisições. Tente novamente em instantes." });
+  }
+  next();
+};
+app.use("/api/ai", rateLimit);
 
 // Helper to instantiate server-side Gemini client utility
 const getGeminiClient = () => {
@@ -118,8 +146,7 @@ app.get("/api/health", (_req, res) => {
 
 // API: Server-side Gemini product generation
 app.post("/api/ai/products", async (req, res) => {
-  const { theme } = req.body || {};
-  const currentTheme = (typeof theme === "string" && theme.trim()) ? theme.trim() : "Tecnologia & Acessórios";
+  const currentTheme = cleanInput(req.body?.theme, "Tecnologia & Acessórios");
 
   try {
     const ai = getGeminiClient();
@@ -186,6 +213,27 @@ app.post("/api/ai/image", async (req, res) => {
     return res.json({ imageBase64: svgBase64 });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || "Failed to generate image" });
+  }
+});
+
+// API: Travel guide chat used by the travel template's live preview.
+// Keeps the Gemini key on the server — the browser bundle no longer ships the SDK.
+app.post("/api/ai/travel-chat", async (req, res) => {
+  const message = cleanInput(req.body?.message, "");
+  if (!message) return res.status(400).json({ error: "Mensagem vazia." });
+
+  const ai = getGeminiClient();
+  if (!ai) return res.json({ reply: null, source: "fallback-no-key" });
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3.8-flash",
+      contents: `Você é um guia de viagens profissional. O usuário perguntou sobre um roteiro: "${message}". Responda de forma sucinta e calorosa, com 2 dicas de passeios ou gastronomia, em português (pt-BR).`,
+    });
+    return res.json({ reply: response.text?.trim() || null, source: "gemini-3.8-flash" });
+  } catch (error: any) {
+    console.error("[Server Gemini] travel-chat error:", error?.message || error);
+    return res.json({ reply: null, source: "fallback-error" });
   }
 });
 

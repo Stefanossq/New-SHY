@@ -30,7 +30,7 @@ fn get_saved_key() -> Result<String, String> {
 
 /// Salva a chave de API no Windows Credential Manager via keyring
 #[tauri::command]
-pub fn save_api_key(key: String) -> Result<(), String> {
+fn save_api_key(key: String) -> Result<(), String> {
     let trimmed = key.trim();
     if trimmed.is_empty() {
         return Err("A chave de API não pode estar vazia.".to_string());
@@ -45,7 +45,7 @@ pub fn save_api_key(key: String) -> Result<(), String> {
 /// Verifica se já existe uma chave salva e válida.
 /// Retorna Result<bool, String> para não mascarar falhas do Windows Credential Manager como 'sem chave'.
 #[tauri::command]
-pub fn has_api_key() -> Result<bool, String> {
+fn has_api_key() -> Result<bool, String> {
     let entry = Entry::new(SERVICE_NAME, USER_KEY_NAME)
         .map_err(|e| format!("Falha ao conectar ao Windows Credential Manager: {}", e))?;
     
@@ -59,10 +59,10 @@ pub fn has_api_key() -> Result<bool, String> {
 /// Remove a chave de API salva no Windows Credential Manager.
 /// Deletar credencial inexistente (NoEntry) é tratado como sucesso Ok(()).
 #[tauri::command]
-pub fn delete_api_key() -> Result<(), String> {
+fn delete_api_key() -> Result<(), String> {
     let entry = Entry::new(SERVICE_NAME, USER_KEY_NAME)
         .map_err(|e| format!("Erro ao inicializar entrada no cofre: {}", e))?;
-    match entry.delete_password() {
+    match entry.delete_credential() {
         Ok(()) => Ok(()),
         Err(keyring::Error::NoEntry) => Ok(()),
         Err(e) => Err(format!("Erro ao remover chave do cofre seguro: {}", e)),
@@ -72,7 +72,7 @@ pub fn delete_api_key() -> Result<(), String> {
 /// Faz uma chamada mínima ao Gemini para validar se a chave funciona e tem cota
 /// Header: x-goog-api-key: <chave> (sem parâmetros na URL)
 #[tauri::command]
-pub async fn test_api_key() -> Result<String, String> {
+async fn test_api_key() -> Result<String, String> {
     let key = get_saved_key()?;
     let client = get_http_client();
 
@@ -115,7 +115,7 @@ pub async fn test_api_key() -> Result<String, String> {
 /// Header: x-goog-api-key: <chave> (sem query param)
 /// generationConfig: responseMimeType e responseSchema estruturado espelhado de server.ts
 #[tauri::command]
-pub async fn generate_store_products(theme: String) -> Result<Value, String> {
+async fn generate_store_products(theme: String) -> Result<Value, String> {
     let key = get_saved_key()?;
     let client = get_http_client();
 
@@ -191,7 +191,7 @@ pub async fn generate_store_products(theme: String) -> Result<Value, String> {
 /// Header: x-goog-api-key: <chave>
 /// generationConfig: responseMimeType e responseSchema estruturado para artigos do blog
 #[tauri::command]
-pub async fn generate_blog_news(topic: String) -> Result<Value, String> {
+async fn generate_blog_news(topic: String) -> Result<Value, String> {
     let key = get_saved_key()?;
     let client = get_http_client();
 
@@ -266,7 +266,7 @@ pub async fn generate_blog_news(topic: String) -> Result<Value, String> {
 /// Header: x-goog-api-key: <chave>
 /// generationConfig: responseMimeType e responseSchema estruturado por dias
 #[tauri::command]
-pub async fn generate_travel_plan(destination: String, days: u32) -> Result<Value, String> {
+async fn generate_travel_plan(destination: String, days: u32) -> Result<Value, String> {
     if days < 1 || days > 30 {
         return Err("Número de dias deve estar entre 1 e 30.".to_string());
     }

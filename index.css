@@ -1,0 +1,74 @@
+@import 'highlight.js/styles/atom-one-dark.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Design tokens (HSL triplets) — one place to retheme the whole studio. */
+    --background: 220 39% 6%;
+    --foreground: 220 14% 92%;
+    --surface: 220 33% 9%;
+    --surface-raised: 220 28% 12%;
+    --muted: 220 22% 16%;
+    --muted-foreground: 218 11% 62%;
+    --border: 220 20% 18%;
+    --ring: 188 86% 53%;
+    --primary: 188 86% 53%;
+    --primary-foreground: 220 39% 6%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --radius: 0.75rem;
+    color-scheme: dark;
+  }
+
+  html,
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  /* Visible, consistent keyboard focus everywhere (WCAG 2.4.7). */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted)) transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted));
+    border-radius: 9999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Subtle ambient glow behind the main canvas. */
+  .app-backdrop {
+    background-image: radial-gradient(60rem 30rem at 15% -10%, hsl(188 86% 53% / 0.08), transparent 60%),
+      radial-gradient(50rem 30rem at 110% 10%, hsl(234 89% 64% / 0.07), transparent 60%);
+  }
+}
