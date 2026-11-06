@@ -1,4 +1,5 @@
 import { AIProduct } from "./templates";
+import { PlatformAdapter } from "./platformAdapter";
 
 export type AIProviderType = "gemini" | "openai" | "mock";
 
@@ -17,6 +18,20 @@ const DEFAULT_CONFIG: AIServiceConfig = {
   openaiEndpoint: "https://api.openai.com/v1",
   openaiModel: "gpt-4o-mini",
 };
+
+/**
+ * Invoca com segurança comandos do Tauri no container Desktop (.exe).
+ */
+async function invokeTauri<T>(cmd: string, args: Record<string, any> = {}): Promise<T> {
+  const tauri = (window as any).__TAURI__;
+  if (tauri && typeof tauri.invoke === "function") {
+    return await tauri.invoke(cmd, args);
+  }
+  if ((window as any).__TAURI_INTERNALS__?.invoke) {
+    return await (window as any).__TAURI_INTERNALS__.invoke(cmd, args);
+  }
+  throw new Error(`Ambiente Tauri não detectado para invocar comando: ${cmd}`);
+}
 
 /**
  * Recovers configuration from localStorage
@@ -51,9 +66,9 @@ export const saveAIConfig = (config: AIServiceConfig) => {
 };
 
 /**
- * Mock generator for completely offline or zero-key usage.
+ * Fallback de produtos estruturados locais em caso de indisponibilidade ou modo mock.
  */
-const generateMockProducts = (theme: string): AIProduct[] => {
+export const generateFallbackProducts = (theme: string): AIProduct[] => {
   const norm = (theme || "").toLowerCase().trim();
   if (norm.includes("car") || norm.includes("veic") || norm.includes("auto")) {
     return [
@@ -73,7 +88,7 @@ const generateMockProducts = (theme: string): AIProduct[] => {
 };
 
 /**
- * Generates base64 SVG mock images for instant, keyless image output.
+ * Gera imagens SVG em base64 sem dependências de rede.
  */
 const generateMockImageSvgBase64 = (name: string, bg: string = "22d3ee"): string => {
   const safeName = (name || "Produto").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -91,25 +106,142 @@ const generateMockImageSvgBase64 = (name: string, bg: string = "22d3ee"): string
 };
 
 /**
- * Service to manage AI generations across Gemini (server-side proxy), custom OpenAI API, and Mock.
+ * Service to manage AI generations across Gemini (Tauri Rust BYOK Desktop vs Server Proxy Web).
  */
 export class AIService {
   /**
+   * Verifica se já existe chave configurada.
+   * No Tauri Desktop: consulta o Windows Credential Manager via invoke('has_api_key').
+  /**
+   * Verifica se já existe chave configurada no keyring do Windows.
+   * No Tauri Desktop: invoca has_api_key() que retorna Result<bool, String>.
+   * Se Ok(false) -> retorna { exists: false } (abre ApiKeyModal).
+   * Se Err(msg) -> retorna { exists: false, error: msg } para exibir alerta sem mascarar falhas no cofre.
+   * No Web/Dev -> retorna { exists: true } pois a chave é provida pelo .env do servidor.
+   */
+  static async checkApiKeyStatus(): Promise<{ exists: boolean; error?: string }> {
+    if (PlatformAdapter.isTauriApp()) {
+      try {
+        const has = await invokeTauri<boolean>("has_api_key");
+        return { exists: Boolean(has) };
+      } catch (err: any) {
+        const errorMsg = err?.toString() || "Erro ao acessar o Windows Credential Manager";
+        console.error("[Keyring Error]:", errorMsg);
+        return { exists: false, error: errorMsg };
+      }
+    }
+
+    // Modo Web / Dev: a chave vem do .env do servidor; não requer modal
+    return { exists: true };
+  }
+
+  /**
+   * Helper simplificado para verificações booleanas retrocompatíveis
+   */
+  static async hasApiKey(): Promise<boolean> {
+    const status = await this.checkApiKeyStatus();
+    return status.exists;
+  }
+
+  /**
+   * Salva a chave de API no Windows Credential Manager exclusivamente via Tauri.
+   * Não persiste no localStorage em modo dev.
+   */
+  static async saveApiKey(key: string): Promise<void> {
+    const trimmed = key.trim();
+    if (!trimmed) throw new Error("A chave de API não pode estar vazia.");
+
+    if (PlatformAdapter.isTauriApp()) {
+      await invokeTauri("save_api_key", { key: trimmed });
+    }
+  }
+
+  /**
+   * Remove a chave salva no Windows Credential Manager via Tauri.
+   */
+  static async deleteApiKey(): Promise<void> {
+    if (PlatformAdapter.isTauriApp()) {
+      await invokeTauri("delete_api_key");
+    }
+  }
+
+  /**
+   * Valida conexão da chave com o Gemini 3.8 Flash
+   */
+  static async testApiKey(): Promise<{ success: boolean; message: string }> {
+    if (PlatformAdapter.isTauriApp()) {
+      try {
+        const msg = await invokeTauri<string>("test_api_key");
+        return { success: true, message: msg || "Conexão OK!" };
+      } catch (err: any) {
+        return { success: false, message: err?.toString() || "Falha ao validar chave." };
+      }
+    }
+
+    // Modo Web Dev: testa via servidor proxy do Express
+    try {
+      const res = await fetch("/api/ai/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ theme: "Teste Conexão" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.source === "fallback-no-key") {
+          return { success: false, message: "GEMINI_API_KEY não encontrada no .env do servidor." };
+        }
+        return { success: true, message: "Conexão validada com sucesso com Gemini 3.8 Flash!" };
+      }
+      return { success: false, message: `Servidor retornou erro HTTP ${res.status}.` };
+    } catch (err: any) {
+      return { success: false, message: err?.message || "Falha na conexão de rede." };
+    }
+  }
+
+  /**
    * Generates products list
+   * Regra estrita de fallback:
+   * 1. Se for Tauri Desktop: chama invoke('generate_store_products').
+   *    Se falhar, propaga o erro detalhado — NÃO tenta fetch('/api/ai/...') pois no Desktop o Express não existe.
+   * 2. Se for Web (dev): usa fetch('/api/ai/products').
+   * Em ambos os casos, dados de fallback locais podem ser usados com aviso visual caso haja falha não fatal.
    */
   static async generateProducts(theme: string): Promise<AIProduct[]> {
     const config = getAIConfig();
 
     if (config.provider === "mock") {
       await new Promise((r) => setTimeout(r, 400));
-      return generateMockProducts(theme);
+      return generateFallbackProducts(theme);
     }
 
     if (config.provider === "openai") {
       return this.generateWithOpenAI(theme, config);
     }
 
-    // Default: Server-side Gemini endpoint
+    // Provedor padrão: Gemini 3.8 Flash
+    if (PlatformAdapter.isTauriApp()) {
+      try {
+        const tauriProducts = await invokeTauri<any[]>("generate_store_products", { theme });
+        if (Array.isArray(tauriProducts) && tauriProducts.length > 0) {
+          return tauriProducts.map((p) => ({
+            name: p.name || `Produto ${theme}`,
+            price: Number(p.price) || 99.9,
+            description: p.description || `Item da coleção ${theme}`,
+            category: p.category || "Geral",
+            stock: Number(p.stock) || 10,
+          }));
+        }
+        // Se retornou vazio do Rust
+        return generateFallbackProducts(theme);
+      } catch (tauriErr: any) {
+        const errorMsg = tauriErr?.toString() || "Falha desconhecida no backend Tauri Desktop";
+        console.error("[Tauri Gemini Desktop Error]:", errorMsg);
+        // Propaga o erro claro no desktop sem tentar Express
+        throw new Error(`[Desktop Gemini] ${errorMsg}`);
+      }
+    }
+
+    // Modo Web / Dev (onde o Express existe)
     return this.generateWithServerGemini(theme);
   }
 
@@ -126,24 +258,27 @@ export class AIService {
       return generateMockImageSvgBase64(productName, bg);
     }
 
-    try {
-      const response = await fetch("/api/ai/image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productName, bgIndex }),
-      });
+    // Se estiver em modo web/dev, pode usar o endpoint de imagem do Express
+    if (!PlatformAdapter.isTauriApp()) {
+      try {
+        const response = await fetch("/api/ai/image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productName, bgIndex }),
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.imageBase64) {
-          return data.imageBase64;
+        if (response.ok) {
+          const data = await response.json();
+          if (data.imageBase64) {
+            return data.imageBase64;
+          }
         }
+      } catch (err) {
+        console.warn("Server image endpoint error, falling back to local SVG:", err);
       }
-    } catch (err) {
-      console.warn("Server image endpoint error, falling back to local SVG:", err);
     }
 
-    // Fallback local SVG
+    // Fallback local SVG para desktop e dev
     const colors = ["22d3ee", "10b981", "3b82f6", "f59e0b"];
     const bg = colors[bgIndex % colors.length];
     return generateMockImageSvgBase64(productName, bg);
@@ -169,13 +304,12 @@ export class AIService {
       console.warn("Failed to contact /api/ai/products, using robust fallback:", err);
     }
 
-    // If server had any issue or network failure, return graceful theme products without throwing
-    return generateMockProducts(theme);
+    return generateFallbackProducts(theme);
   }
 
   private static async generateWithOpenAI(theme: string, config: AIServiceConfig): Promise<AIProduct[]> {
     if (!config.openaiKey) {
-      return generateMockProducts(theme);
+      return generateFallbackProducts(theme);
     }
 
     const endpoint = config.openaiEndpoint || "https://api.openai.com/v1";
@@ -209,7 +343,7 @@ Não escreva explicações, markdown ou blocos de código além do JSON puro.`;
 
     if (!response.ok) {
       console.warn(`OpenAI status ${response.status}, falling back to mock`);
-      return generateMockProducts(theme);
+      return generateFallbackProducts(theme);
     }
 
     const data = await response.json();

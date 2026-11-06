@@ -8,6 +8,7 @@
     "build": "vite build",
     "start": "tsx server.ts",
     "test": "tsx --test tests/**/*.test.ts",
+    "tauri": "tauri",
     "preview": "vite preview"
   },
   "dependencies": {

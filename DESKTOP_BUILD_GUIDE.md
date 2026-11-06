@@ -1,67 +1,113 @@
-# 🚀 Guia de Empacotamento do Executável (.exe)
-Este projeto está arquitetado para funcionar tanto na Web quanto como um **programa desktop `.exe` nativo de alto desempenho** para Windows através do **Tauri v2**.
+# 🖥️ Guia de Compilação Desktop (Tauri v2 + Windows BYOK)
+
+Este documento contém o passo a passo completo para compilar o executável portátil (`.exe`) e o instalador oficial do Windows (`.msi` / NSIS) utilizando o modelo seguro **BYOK (Bring Your Own Key)** com o **Windows Credential Manager**.
 
 ---
 
-## 📋 Pré-requisitos na Máquina do Desenvolvedor (Windows)
+## 1. Migrando do Modo Dev (.env) para o Executável (.exe)
 
-1. **Node.js (v18+) e NPM**:
-   - `node -v`
-2. **Rust Toolchain**:
-   - Baixe e instale pelo instalador oficial: [rustup.rs](https://rustup.rs)
-3. **Microsoft C++ Build Tools**:
-   - Baixe o *Visual Studio Installer* e marque a opção: **"Desenvolvimento para Desktop com C++"** (*Desktop development with C++*).
+- **Modo Web Dev (`npm run dev`)**:
+  - A chave de API do Gemini vem exclusivamente da variável `GEMINI_API_KEY` configurada no `.env` do backend (`server.ts`).
+  - No modo Web, o modal `ApiKeyModal` **não é exibido** e nenhuma chave é gravada no `localStorage` do navegador.
+- **Modo Desktop Produção (`.exe` / `.msi`)**:
+  - O arquivo `.env` **não é embutido e não é lido pelo executável** (por razões de segurança, para não vazar credenciais no binário distribuído para o cliente).
+  - Ao abrir o aplicativo desktop pela primeira vez, o `ApiKeyModal` é exibido automaticamente uma única vez.
+  - O usuário cola sua chave pessoal do Google AI Studio, clica em **"Salvar no Cofre"**, e ela é gravada diretamente no **Windows Credential Manager** (sob o serviço `new-shy`).
+  - Nas execuções seguintes, o aplicativo lê a credencial do cofre do sistema de forma silenciosa e automática.
 
 ---
 
-## 🛠️ Passo a Passo para Gerar o `.exe`
+## 2. Pré-Requisitos no Windows 10/11
 
-Abra o terminal na raiz deste projeto:
+Antes de compilar no seu computador ou máquina de build Windows, instale os seguintes componentes:
 
-### 1. Instalar as dependências do projeto
-```bash
+### A. Ferramentas do Compilador C++ (Visual Studio Build Tools)
+1. Baixe o instalador do [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+2. No instalador, marque a carga de trabalho:
+   - **Desenvolvimento para desktop com C++** (Desktop development with C++).
+   - Componentes incluídos: Compilador MSVC, Windows 10/11 SDK e ferramentas CMake.
+
+### B. Rust & Cargo
+1. Baixe o [rustup-init.exe](https://rustup.rs/) e execute.
+2. Selecione a opção padrão (1 - default installation).
+3. Abra um novo terminal PowerShell e valide:
+   ```powershell
+   rustc --version
+   cargo --version
+   ```
+
+### C. WiX Toolset (Obrigatório para gerar o instalador corporativo `.msi`)
+1. Baixe e instale o [WiX Toolset v3.14 ou v4](https://wixtoolset.org/releases/).
+2. Certifique-se de que os executáveis `candle.exe` e `light.exe` estejam no `PATH` do sistema Windows.
+
+### D. Node.js (v18+)
+```powershell
+node --version
+npm --version
+```
+
+---
+
+## 3. Passo a Passo de Compilação
+
+Na pasta raiz do projeto clonado no seu Windows:
+
+### Passo 1: Instalar dependências Node
+```powershell
 npm install
 ```
 
-### 2. Testar o aplicativo em modo Desktop (Desenvolvimento com Hot-Reload)
-```bash
-npx tauri dev
-```
-*O Tauri abrirá uma janela nativa do Windows rodando a interface React com aceleração de hardware WebView2.*
-
-### 3. Compilar o `.exe` Independente para Produção
-```bash
-npx tauri build
+### Passo 2: Executar no modo de desenvolvimento Desktop (Hot Reload)
+```powershell
+npm run tauri dev
 ```
 
-O compilador Rust irá gerar os instaladores e o binário independente nos seguintes diretórios:
-- **Executável direto (.exe)**: `src-tauri/target/release/saas-prototype-engine.exe`
-- **Instalador com Assistente (.msi / setup.exe)**: `src-tauri/target/release/bundle/msi/`
+### Passo 3: Gerar os Ícones da Aplicação (Obrigatório para o Bundle)
+Como o empacotador do instalador (`.msi` / NSIS) exige os arquivos de ícone configurados na seção `bundle.icon`, gere o conjunto completo a partir de uma imagem PNG quadrada (recomendado 1024x1024):
+```powershell
+# Cria automaticamente icons/32x32.png, 128x128.png, icon.ico, etc.
+npx @tauri-apps/cli icon caminho/para/seu-logo-1024x1024.png
+# Ou via npm script caso configurado:
+npm run tauri icon caminho/para/seu-logo-1024x1024.png
+```
+
+### Passo 4: Gerar o Executável Standalone e Instaladores
+Para compilar a versão final de produção otimizada:
+```powershell
+npm run tauri build
+```
 
 ---
 
-## 🌐 Como Separar os Repositórios de Templates no GitHub
+## 4. Onde Ficam os Arquivos Gerados?
 
-Para manter o `.exe` leve (~12 MB) e permitir adicionar novos templates sem recompilar o programa:
+Após a conclusão do comando `npm run tauri build`, todos os instaladores e binários estarão na pasta:
 
-1. **Crie um repositório no seu GitHub para cada template**:
-   - Exemplo: `https://github.com/seu-usuario/template-ecommerce-convex`
-2. **Adicione um arquivo `blueprint.json` na raiz de cada repositório**:
-   ```json
-   {
-     "templateId": "convex-ecommerce-v1",
-     "name": "E-Commerce Next.js + Convex",
-     "version": "1.0.0",
-     "description": "Template desacoplado com banco Convex",
-     "injectionPoints": [
-       {
-         "filePath": "convex/products.ts",
-         "strategy": "inject-database-schema",
-         "marker": "/* __AI_PRODUCTS_INJECTION_POINT__ */"
-       }
-     ]
-   }
-   ```
-3. **No painel "Registro de Templates"**:
-   - O criador insere a URL do repositório.
-   - O aplicativo faz o stream do template sob demanda e injeta as regras de negócio!
+```
+src-tauri/target/release/
+├── saas-prototype-engine.exe          <- Executável standalone direto
+└── bundle/
+    ├── nsis/
+    │   └── SaaS Prototype Engine_1.0.0_x64-setup.exe   <- Instalador executável padrão (NSIS)
+    └── msi/
+        └── SaaS Prototype Engine_1.0.0_x64_en-US.msi   <- Instalador corporativo Windows (.msi)
+```
+
+---
+
+## 5. Como Funciona a Segurança BYOK no Rust
+
+- **Header Seguro**: Todas as chamadas para o Gemini utilizam o header HTTP:
+  ```http
+  x-goog-api-key: <chave-do-cofre>
+  ```
+  A chave **nunca é incluída na URL** como parâmetro `?key=`.
+- **Chamadas de Rede 100% Nativas no Rust**:
+  - As requisições HTTPS para `https://generativelanguage.googleapis.com` são efetuadas exclusivamente pelo backend Rust utilizando o crate `reqwest` com `rustls-tls`.
+  - Por essa razão, **não é necessário configurar CSP** no `tauri.conf.json` para o domínio do Gemini, mantendo o frontend isolado contra injeções.
+- **Serviço do Windows**:
+  - Serviço: `new-shy`
+  - Conta: `gemini_api_key`
+  - Acesso através do crate Rust `keyring = "3"`.
+- **Remoção de Chave**:
+  - O usuário pode remover sua chave a qualquer momento clicando no botão **"Remover Chave Salva"** no `ApiKeyModal`, que invoca o comando `delete_api_key()`.

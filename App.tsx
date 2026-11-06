@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ProjectType } from './types';
 import SelectionScreen from './components/SelectionScreen';
 import GenerationScreen from './components/GenerationScreen';
@@ -6,10 +6,13 @@ import ResultScreen from './components/ResultScreen';
 import { ResultScreenErrorBoundary } from './components/ResultScreenErrorBoundary';
 import ThemeScreen from './components/ThemeScreen';
 import SettingsModal from './components/SettingsModal';
+import { ApiKeyModal } from './components/ApiKeyModal';
 import { TemplateRegistryDashboard } from './components/TemplateRegistryDashboard';
 import { orchestrateGeneration } from './lib/generatorEngine';
 import { PROJECT_TEMPLATES } from './lib/templates';
-import { Layers, HelpCircle, LayoutGrid, Sliders } from 'lucide-react';
+import { AIService } from './lib/aiService';
+import { PlatformAdapter } from './lib/platformAdapter';
+import { Layers, HelpCircle, LayoutGrid, Sliders, Key } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const App: React.FC = () => {
@@ -20,13 +23,30 @@ const App: React.FC = () => {
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [lifecycleSteps, setLifecycleSteps] = useState<string[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
+  const [isKeyMandatory, setIsKeyMandatory] = useState<boolean>(false);
   const [viewingRegistry, setViewingRegistry] = useState<boolean>(false);
+
 
   const [project, setProject] = useState<{
     type: ProjectType;
     name: string;
     files: Record<string, any>;
   } | null>(null);
+
+  // Checagem de primeiro acesso: se não tem chave ou se houve erro no cofre, abre o ApiKeyModal
+  useEffect(() => {
+    AIService.checkApiKeyStatus().then((status) => {
+      if (status.error) {
+        alert(`Aviso do Cofre de Credenciais: ${status.error}. Você pode tentar novamente ou continuar com fallback.`);
+        setIsApiKeyModalOpen(true); // abre para retry
+        setIsKeyMandatory(false);   // mas não obriga
+      } else if (!status.exists) {
+        setIsApiKeyModalOpen(true);
+        setIsKeyMandatory(true);
+      }
+    });
+  }, []);
 
   /**
    * Helper to execute the core generation flow
@@ -143,6 +163,20 @@ const App: React.FC = () => {
             )}
           </button>
 
+          {PlatformAdapter.isTauriApp() && (
+            <button
+              onClick={() => {
+                setIsKeyMandatory(false);
+                setIsApiKeyModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-850 text-gray-300 hover:text-white px-3 py-1.5 border border-gray-800 hover:border-gray-700 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer"
+              title="Gerenciar Chave de API Gemini no Windows Credential Manager (BYOK)"
+            >
+              <Key className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">Chave</span> Gemini
+            </button>
+          )}
+
           <button
             onClick={() => setIsSettingsOpen(true)}
             className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-850 text-gray-300 hover:text-white px-3 py-1.5 border border-gray-800 hover:border-gray-700 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer"
@@ -221,8 +255,19 @@ const App: React.FC = () => {
 
       {/* Global settings configuration modal */}
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+
+      {/* BYOK Desktop API Key Modal */}
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => {
+          setIsApiKeyModalOpen(false);
+          setIsKeyMandatory(false);
+        }}
+        isMandatory={isKeyMandatory}
+      />
     </div>
   );
 };
 
 export default App;
+
