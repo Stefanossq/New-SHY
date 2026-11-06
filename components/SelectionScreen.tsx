@@ -1,43 +1,44 @@
 import React, { useState } from 'react';
 import { ProjectType } from '../types';
-import { 
-  ShoppingBag, 
-  Terminal, 
-  MapPin, 
-  ArrowRight, 
-  Search, 
-  Cpu, 
-  Database, 
-  Eye, 
-  Zap, 
-  HardDrive, 
-  Layers, 
-  FolderDown,
+import {
+  ShoppingBag,
+  Terminal,
+  MapPin,
+  ArrowRight,
+  Search,
+  Cpu,
+  Database,
+  Eye,
+  Zap,
+  HardDrive,
+  Layers,
   CheckCircle2,
-  Sparkles
+  Sparkles,
 } from 'lucide-react';
 
 interface SelectionScreenProps {
   onSelect: (project: ProjectType) => void;
 }
 
-interface TemplateCardMeta {
+type CategoryFilter = 'all' | 'fullstack' | 'frontend';
+
+export interface TemplateCardMeta {
   type: ProjectType;
   title: string;
   category: 'fullstack' | 'frontend' | 'api';
   categoryLabel: string;
   summary: string;
   stack: string[];
-  capabilities: { icon: any; label: string }[];
+  capabilities: { icon: React.ElementType; label: string }[];
   accentColor: {
     borderHover: string;
     iconBg: string;
     iconText: string;
-    buttonHover: string;
+    glow: string;
   };
 }
 
-const TEMPLATES: TemplateCardMeta[] = [
+export const TEMPLATES: TemplateCardMeta[] = [
   {
     type: 'store',
     title: 'E-Commerce SaaS',
@@ -51,10 +52,10 @@ const TEMPLATES: TemplateCardMeta[] = [
       { icon: Zap, label: 'Geração por IA de Catálogo' },
     ],
     accentColor: {
-      borderHover: 'hover:border-cyan-500/80 hover:shadow-cyan-500/10',
+      borderHover: 'hover:border-cyan-500/70 hover:shadow-cyan-500/10',
       iconBg: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400',
       iconText: 'text-cyan-400',
-      buttonHover: 'hover:bg-cyan-500 hover:text-black',
+      glow: 'bg-cyan-500/15',
     },
   },
   {
@@ -70,10 +71,10 @@ const TEMPLATES: TemplateCardMeta[] = [
       { icon: Database, label: 'Armazenamento Local/State' },
     ],
     accentColor: {
-      borderHover: 'hover:border-emerald-500/80 hover:shadow-emerald-500/10',
+      borderHover: 'hover:border-emerald-500/70 hover:shadow-emerald-500/10',
       iconBg: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
       iconText: 'text-emerald-400',
-      buttonHover: 'hover:bg-emerald-500 hover:text-black',
+      glow: 'bg-emerald-500/15',
     },
   },
   {
@@ -89,206 +90,182 @@ const TEMPLATES: TemplateCardMeta[] = [
       { icon: Database, label: 'Modelo de Destinos' },
     ],
     accentColor: {
-      borderHover: 'hover:border-indigo-500/80 hover:shadow-indigo-500/10',
+      borderHover: 'hover:border-indigo-500/70 hover:shadow-indigo-500/10',
       iconBg: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400',
       iconText: 'text-indigo-400',
-      buttonHover: 'hover:bg-indigo-500 hover:text-white',
+      glow: 'bg-indigo-500/15',
     },
   },
 ];
 
-const SelectionScreen: React.FC<SelectionScreenProps> = ({ onSelect }) => {
-  const [filter, setFilter] = useState<'all' | 'fullstack' | 'frontend'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+const FILTERS: { id: CategoryFilter; label: string }[] = [
+  { id: 'all', label: 'Todos' },
+  { id: 'fullstack', label: 'Full-Stack' },
+  { id: 'frontend', label: 'Frontend' },
+];
 
-  const filteredTemplates = TEMPLATES.filter((tpl) => {
-    const matchesFilter = filter === 'all' || tpl.category === filter;
-    const matchesSearch = 
-      tpl.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tpl.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tpl.stack.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesFilter && matchesSearch;
-  });
+const ICONS: Record<ProjectType, React.ElementType> = { store: ShoppingBag, blog: Terminal, travel: MapPin };
+
+/** Pure filter (unit-tested): category + case-insensitive match on title, summary or stack. */
+export const filterTemplates = (templates: TemplateCardMeta[], filter: CategoryFilter, query: string): TemplateCardMeta[] => {
+  const q = query.trim().toLowerCase();
+  return templates.filter(
+    (tpl) =>
+      (filter === 'all' || tpl.category === filter) &&
+      (!q ||
+        tpl.title.toLowerCase().includes(q) ||
+        tpl.summary.toLowerCase().includes(q) ||
+        tpl.stack.some((s) => s.toLowerCase().includes(q)))
+  );
+};
+
+const SelectionScreen: React.FC<SelectionScreenProps> = ({ onSelect }) => {
+  const [filter, setFilter] = useState<CategoryFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const filteredTemplates = filterTemplates(TEMPLATES, filter, searchQuery);
+
+  const clearFilters = () => {
+    setFilter('all');
+    setSearchQuery('');
+  };
 
   return (
-    <div className="w-full flex flex-col space-y-8 py-4 animate-fade-in">
-      
-      {/* Header & Controls Bar */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-gray-800">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 tracking-wide uppercase">
-            <span>Orquestrador de Scaffolding</span>
-            <span aria-hidden="true">·</span>
-            <span className="text-cyan-400">Templates Disponíveis</span>
-          </div>
-          <h2 className="text-2xl md:text-3xl font-extrabold text-white mt-1.5 tracking-tight">
-            Selecione a Arquitetura do Projeto
-          </h2>
-          <p className="text-sm text-gray-400 mt-1 max-w-2xl">
-            Escolha o modelo de base. O gerador irá compor o código-fonte limpo, schemas de banco e topologia distribuída prontos para exportar.
+    <div className="flex w-full flex-col gap-8">
+      {/* Hero */}
+      <section className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
+        <div className="max-w-2xl">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-semibold text-cyan-300">
+            <Sparkles className="h-3 w-3" /> Passo 1 · Escolha uma arquitetura
+          </span>
+          <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+            Do zero ao protótipo <span className="bg-gradient-to-r from-cyan-300 to-blue-500 bg-clip-text text-transparent">em minutos</span>
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-gray-400">
+            Selecione um template base. O motor compõe código-fonte limpo, schemas de banco e topologia distribuída prontos para exportar.
           </p>
         </div>
 
-        {/* Search & Category Filter Controls */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          {/* Quick Search */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+          <label className="relative">
+            <span className="sr-only">Buscar templates</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
             <input
-              type="text"
+              type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar por stack ou nome..."
-              className="w-full sm:w-56 bg-gray-950 border border-gray-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition-colors"
+              placeholder="Buscar por stack ou nome…"
+              className="h-9 w-full rounded-lg border border-gray-800 bg-gray-950 pl-9 pr-3 text-xs text-gray-200 placeholder-gray-500 transition-colors focus:border-cyan-500 focus:outline-none sm:w-60"
             />
-          </div>
-
-          {/* Segmented Category Filter */}
-          <div className="flex items-center p-1 bg-gray-950 border border-gray-800 rounded-lg">
-            <button
-              onClick={() => setFilter('all')}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                filter === 'all'
-                  ? 'bg-gray-800 text-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              Todos ({TEMPLATES.length})
-            </button>
-            <button
-              onClick={() => setFilter('fullstack')}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                filter === 'fullstack'
-                  ? 'bg-gray-800 text-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              Full-Stack
-            </button>
-            <button
-              onClick={() => setFilter('frontend')}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                filter === 'frontend'
-                  ? 'bg-gray-800 text-white shadow-sm'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              Frontend
-            </button>
+          </label>
+          <div role="radiogroup" aria-label="Filtrar por categoria" className="flex items-center rounded-lg border border-gray-800 bg-gray-950 p-1">
+            {FILTERS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                role="radio"
+                aria-checked={filter === f.id}
+                onClick={() => setFilter(f.id)}
+                className={`whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                  filter === f.id ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {f.id === 'all' ? `${f.label} (${TEMPLATES.length})` : f.label}
+              </button>
+            ))}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Cards grid — each card is a real <button>: focusable, activated by Enter/Space */}
+      <ul className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
         {filteredTemplates.map((template) => {
-          const IconComponent = 
-            template.type === 'store' ? ShoppingBag :
-            template.type === 'blog' ? Terminal : MapPin;
-
+          const IconComponent = ICONS[template.type];
           return (
-            <div
-              key={template.type}
-              onClick={() => onSelect(template.type)}
-              className={`bg-gray-900/90 border border-gray-800 rounded-xl p-6 flex flex-col justify-between transition-all duration-200 hover:-translate-y-1 cursor-pointer group ${template.accentColor.borderHover} hover:shadow-xl`}
-            >
-              <div className="space-y-4">
-                {/* Header row: Icon + Category tag */}
-                <div className="flex items-center justify-between">
-                  <div className={`p-3 rounded-lg border ${template.accentColor.iconBg} transition-transform duration-200 group-hover:scale-105`}>
-                    <IconComponent className="w-6 h-6" />
+            <li key={template.type}>
+              <button
+                type="button"
+                onClick={() => onSelect(template.type)}
+                aria-label={`Gerar ${template.title}`}
+                className={`group relative flex h-full w-full flex-col justify-between overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/70 p-6 text-left transition-all duration-200 hover:-translate-y-1 hover:shadow-2xl cursor-pointer ${template.accentColor.borderHover}`}
+              >
+                <span
+                  aria-hidden
+                  className={`pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full opacity-0 blur-3xl transition-opacity duration-300 group-hover:opacity-100 ${template.accentColor.glow}`}
+                />
+                <div className="relative space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className={`rounded-xl border p-3 transition-transform duration-200 group-hover:scale-105 ${template.accentColor.iconBg}`}>
+                      <IconComponent className="h-6 w-6" />
+                    </div>
+                    <span className="rounded-full border border-gray-800 px-2 py-0.5 text-[10px] font-medium text-gray-400">
+                      {template.categoryLabel}
+                    </span>
                   </div>
-                  <span className="text-xs font-medium text-gray-500">
-                    {template.categoryLabel}
+
+                  <div>
+                    <h3 className="text-lg font-bold text-white">{template.title}</h3>
+                    <p className="mt-2 text-xs leading-relaxed text-gray-400">{template.summary}</p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {template.stack.map((item) => (
+                      <span key={item} className="rounded-md border border-gray-800 bg-gray-950 px-2 py-0.5 font-mono text-[10px] text-gray-300">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+
+                  <ul className="space-y-1.5 border-t border-gray-800/80 pt-3">
+                    {template.capabilities.map((cap) => {
+                      const CapIcon = cap.icon;
+                      return (
+                        <li key={cap.label} className="flex items-center gap-2 text-xs text-gray-400">
+                          <CapIcon className={`h-3.5 w-3.5 shrink-0 ${template.accentColor.iconText}`} />
+                          <span className="truncate">{cap.label}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+
+                <div className="relative mt-5 flex items-center justify-between border-t border-gray-800/80 pt-4">
+                  <span className="text-xs font-semibold text-gray-300 transition-colors group-hover:text-white">
+                    {template.type === 'store' ? 'Escolher tema' : 'Gerar agora'}
+                  </span>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-800 transition-colors group-hover:bg-cyan-500">
+                    <ArrowRight className="h-4 w-4 text-gray-300 transition-all group-hover:translate-x-0.5 group-hover:text-gray-950" />
                   </span>
                 </div>
-
-                {/* Title & Description */}
-                <div>
-                  <h3 className="text-lg font-bold text-white group-hover:text-cyan-300 transition-colors">
-                    {template.title}
-                  </h3>
-                  <p className="text-xs text-gray-400 mt-2 leading-relaxed">
-                    {template.summary}
-                  </p>
-                </div>
-
-                {/* Stack Tags */}
-                <div className="flex flex-wrap items-center gap-1.5 pt-2">
-                  {template.stack.map((item, idx) => (
-                    <span
-                      key={idx}
-                      className="text-[11px] font-mono px-2 py-0.5 rounded bg-gray-950 border border-gray-800 text-gray-300"
-                    >
-                      {item}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Architecture Capabilities */}
-                <div className="pt-3 border-t border-gray-800/80 space-y-1.5">
-                  {template.capabilities.map((cap, cIdx) => {
-                    const CapIcon = cap.icon;
-                    return (
-                      <div key={cIdx} className="flex items-center gap-2 text-xs text-gray-400">
-                        <CapIcon className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-                        <span className="truncate">{cap.label}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Action Footer */}
-              <div className="pt-6 mt-4 border-t border-gray-800/80 flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-400 group-hover:text-white transition-colors">
-                  Iniciar Orquestração
-                </span>
-                <div className="w-8 h-8 rounded-full bg-gray-800 group-hover:bg-cyan-500 flex items-center justify-center transition-colors">
-                  <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-black transition-colors" />
-                </div>
-              </div>
-            </div>
+              </button>
+            </li>
           );
         })}
-      </div>
+      </ul>
 
       {filteredTemplates.length === 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center text-gray-400 space-y-3">
-          <Layers className="w-8 h-8 mx-auto text-gray-600" />
-          <p className="text-sm">Nenhum template encontrado com os critérios de busca selecionados.</p>
-          <button
-            onClick={() => { setFilter('all'); setSearchQuery(''); }}
-            className="text-xs text-cyan-400 hover:underline"
-          >
+        <div className="space-y-3 rounded-2xl border border-dashed border-gray-800 p-12 text-center text-gray-400">
+          <Layers className="mx-auto h-8 w-8 text-gray-600" />
+          <p className="text-sm">Nenhum template encontrado com esses critérios.</p>
+          <button type="button" onClick={clearFilters} className="text-xs font-semibold text-cyan-400 hover:underline cursor-pointer">
             Limpar filtros
           </button>
         </div>
       )}
 
-      {/* Desktop & System Architecture Info Bar */}
-      <div className="bg-gray-950 border border-gray-850 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-400">
-        <div className="flex flex-wrap items-center gap-6">
-          <div className="flex items-center gap-2">
-            <HardDrive className="w-4 h-4 text-cyan-400" />
-            <span>Saída: <strong className="text-gray-200">Gravação Direta em Disco (.exe) ou ZIP</strong></span>
-          </div>
-          <div className="hidden sm:flex items-center gap-2">
-            <Layers className="w-4 h-4 text-emerald-400" />
-            <span>Distribuição: <strong className="text-gray-200">GitHub CDN Mesh</strong></span>
-          </div>
-          <div className="hidden lg:flex items-center gap-2">
-            <Cpu className="w-4 h-4 text-indigo-400" />
-            <span>Runtime: <strong className="text-gray-200">TypeScript 5.8 / Standalone</strong></span>
-          </div>
+      {/* Platform facts — only claims that have an implementation behind them */}
+      <div className="flex flex-col items-center justify-between gap-3 rounded-xl border border-gray-800 bg-gray-950/60 p-4 text-xs text-gray-400 md:flex-row">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <span className="flex items-center gap-2">
+            <HardDrive className="h-4 w-4 text-cyan-400" /> Saída: gravação em disco (.exe) ou ZIP
+          </span>
+          <span className="flex items-center gap-2">
+            <Cpu className="h-4 w-4 text-indigo-400" /> Gemini, OpenAI ou modo offline
+          </span>
         </div>
-
-        <div className="flex items-center gap-2 text-[11px] font-mono text-gray-500 shrink-0">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-          <span>Motor de Scaffolding Pronto</span>
-        </div>
+        <span className="flex items-center gap-2 font-mono text-[11px] text-gray-500">
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> Motor de scaffolding pronto
+        </span>
       </div>
-
     </div>
   );
 };

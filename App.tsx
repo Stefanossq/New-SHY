@@ -1,273 +1,236 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { ProjectType } from './types';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
+import { Toaster, toast } from 'sonner';
+import { Layers, Plus, Sliders, Key, LayoutGrid, Wallet, ShoppingBag, Terminal, MapPin, Command as CommandIcon } from 'lucide-react';
+import type { ProjectType } from './types';
 import SelectionScreen from './components/SelectionScreen';
 import GenerationScreen from './components/GenerationScreen';
-import ResultScreen from './components/ResultScreen';
 import { ResultScreenErrorBoundary } from './components/ResultScreenErrorBoundary';
 import ThemeScreen from './components/ThemeScreen';
 import SettingsModal from './components/SettingsModal';
 import { ApiKeyModal } from './components/ApiKeyModal';
-import { TemplateRegistryDashboard } from './components/TemplateRegistryDashboard';
-import { orchestrateGeneration } from './lib/generatorEngine';
-import { PROJECT_TEMPLATES } from './lib/templates';
+import { BillingDialog } from './components/BillingDialog';
+import { CommandPalette, type PaletteAction } from './components/CommandPalette';
+import { AppSidebar, CreditsCard, type AppView } from './components/layout/AppSidebar';
+import { WizardStepper } from './components/layout/WizardStepper';
+import { TooltipProvider } from './components/ui/tooltip';
+import { Button } from './components/ui/button';
 import { AIService } from './lib/aiService';
 import { PlatformAdapter } from './lib/platformAdapter';
-import { Layers, HelpCircle, LayoutGrid, Sliders, Key } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { creditLedger, InsufficientCreditsError } from './lib/creditLedger';
+import { useProjectGeneration } from './hooks/useProjectGeneration';
+
+// Heavy, rarely-first screens are code-split: the initial load only ships the wizard.
+const ResultScreen = lazy(() => import('./components/ResultScreen'));
+const TemplateRegistryDashboard = lazy(() =>
+  import('./components/TemplateRegistryDashboard').then((m) => ({ default: m.TemplateRegistryDashboard }))
+);
+
+const ScreenFallback = () => (
+  <div role="status" aria-label="Carregando" className="space-y-4">
+    <div className="h-20 animate-pulse rounded-xl bg-gray-900/70" />
+    <div className="h-10 w-2/3 animate-pulse rounded-xl bg-gray-900/70" />
+    <div className="h-[420px] animate-pulse rounded-xl bg-gray-900/70" />
+  </div>
+);
 
 const App: React.FC = () => {
-  const [step, setStep] = useState<'selection' | 'theme' | 'generating' | 'result'>('selection');
-  
-  // Custom states for the new de-mocked generator engine
-  const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
-  const [errorDetail, setErrorDetail] = useState<string | null>(null);
-  const [lifecycleSteps, setLifecycleSteps] = useState<string[]>([]);
-  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
-  const [isKeyMandatory, setIsKeyMandatory] = useState<boolean>(false);
-  const [viewingRegistry, setViewingRegistry] = useState<boolean>(false);
+  const gen = useProjectGeneration();
+  const reduceMotion = useReducedMotion();
+  const isDesktop = PlatformAdapter.isTauriApp();
 
+  const [view, setView] = useState<AppView>('studio');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isBillingOpen, setIsBillingOpen] = useState(false);
+  const [isCommandOpen, setIsCommandOpen] = useState(false);
+  const [apiKeyModal, setApiKeyModal] = useState<{ open: boolean; mandatory: boolean }>({ open: false, mandatory: false });
 
-  const [project, setProject] = useState<{
-    type: ProjectType;
-    name: string;
-    files: Record<string, any>;
-  } | null>(null);
+  // Durability: refund reservations orphaned by a crash / closed tab during a previous run.
+  useEffect(() => {
+    const recovered = creditLedger.recoverStaleReservations();
+    if (recovered > 0) toast.info('Créditos estornados', { description: 'Uma geração interrompida anteriormente foi estornada.' });
+  }, []);
 
-  // Checagem de primeiro acesso: se não tem chave ou se houve erro no cofre, abre o ApiKeyModal
+  // First run: ask for the API key on desktop (non-blocking toast instead of window.alert).
   useEffect(() => {
     AIService.checkApiKeyStatus().then((status) => {
       if (status.error) {
-        alert(`Aviso do Cofre de Credenciais: ${status.error}. Você pode tentar novamente ou continuar com fallback.`);
-        setIsApiKeyModalOpen(true); // abre para retry
-        setIsKeyMandatory(false);   // mas não obriga
+        toast.warning('Cofre de credenciais indisponível', { description: status.error });
+        setApiKeyModal({ open: true, mandatory: false });
       } else if (!status.exists) {
-        setIsApiKeyModalOpen(true);
-        setIsKeyMandatory(true);
+        setApiKeyModal({ open: true, mandatory: true });
       }
     });
   }, []);
 
-  /**
-   * Helper to execute the core generation flow
-   */
-  const triggerGenerationFlow = useCallback(async (type: ProjectType, theme: string = '') => {
-    setStep('generating');
-    setCurrentStepIndex(0);
-    setErrorDetail(null);
-    setViewingRegistry(false); // Reset to see progress
+  // Global shortcut: Ctrl/⌘ + K opens the command palette.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
-    // Debit cost on generation start
-    const stored = localStorage.getItem('user_generator_credits');
-    const activeCredits = stored ? parseFloat(stored) : 8.8;
-    // Decrement a simulated 1.2 credits
-    const remaining = Math.max(0, activeCredits - 1.2);
-    localStorage.setItem('user_generator_credits', remaining.toFixed(1));
+  const openBilling = useCallback(() => setIsBillingOpen(true), []);
 
-    const template = PROJECT_TEMPLATES[type];
-    // Define initial pending steps
-    const initialSteps = type === 'store' 
-      ? [
-          "Carregando configurações e checando conexão com Provedor de IA",
-          "Buscando informações do segmento e gerando catálogo de produtos",
-          "Gerando fotos de estúdio profissionais para cada produto via IA",
-          "Estruturando Schema de dados do catálogo dinâmico",
-          ...template.lifecycle
-        ]
-      : [...template.lifecycle];
-    
-    setLifecycleSteps(initialSteps);
-
-    try {
-      const result = await orchestrateGeneration(type, theme, (progress) => {
-        // Callback tracking actual event telemetry from generatorEngine
-        setCurrentStepIndex(progress.stepIndex);
-        if (progress.status === 'error') {
-          setErrorDetail(progress.message);
+  const startGeneration = useCallback(
+    async (type: ProjectType, theme = '') => {
+      setView('studio');
+      try {
+        await gen.generate(type, theme);
+      } catch (err) {
+        if (err instanceof InsufficientCreditsError) {
+          toast.error('Créditos insuficientes', {
+            description: err.message,
+            action: { label: 'Adicionar', onClick: openBilling },
+          });
+          return;
         }
-      });
+        toast.error('Não foi possível iniciar a geração', { description: err instanceof Error ? err.message : String(err) });
+      }
+    },
+    [gen.generate, openBilling]
+  );
 
-      setProject({
-        type: result.type,
-        name: result.name,
-        files: result.files,
-      });
-      // Small pause on final step for great UX
-      setTimeout(() => {
-        setStep('result');
-      }, 800);
-    } catch (err: any) {
-      console.error("Generator execution error:", err);
-      setErrorDetail(err.message || 'Ocorreu um erro inesperado durante a geração.');
-    }
-  }, []);
+  const handleSelectProject = useCallback(
+    (type: ProjectType) => (type === 'store' ? gen.goToTheme() : void startGeneration(type)),
+    [gen.goToTheme, startGeneration]
+  );
 
-  const handleSelectProject = useCallback((projectType: ProjectType) => {
-    if (projectType === 'store') {
-      setStep('theme');
-    } else {
-      triggerGenerationFlow(projectType);
-    }
-  }, [triggerGenerationFlow]);
+  const handleNewProject = useCallback(() => {
+    gen.reset();
+    setView('studio');
+  }, [gen.reset]);
 
-  const handleGenerateProducts = useCallback(async (theme: string) => {
-    triggerGenerationFlow('store', theme);
-  }, [triggerGenerationFlow]);
+  const paletteActions = useMemo<PaletteAction[]>(
+    () => [
+      { id: 'new', group: 'Projeto', label: 'Novo projeto', icon: Plus, keywords: ['inicio', 'reset'], run: handleNewProject },
+      { id: 'gen-store', group: 'Projeto', label: 'Gerar E-Commerce (escolher tema)', icon: ShoppingBag, keywords: ['loja', 'store'], run: () => { setView('studio'); gen.goToTheme(); } },
+      { id: 'gen-blog', group: 'Projeto', label: 'Gerar Blog / CMS', icon: Terminal, keywords: ['blog'], run: () => void startGeneration('blog') },
+      { id: 'gen-travel', group: 'Projeto', label: 'Gerar Planejador de Viagens', icon: MapPin, keywords: ['viagem', 'travel'], run: () => void startGeneration('travel') },
+      { id: 'registry', group: 'Navegar', label: 'Abrir Templates Hub', icon: LayoutGrid, keywords: ['registry', 'templates'], run: () => setView('registry') },
+      { id: 'settings', group: 'Configuração', label: 'Provedores de IA', icon: Sliders, keywords: ['gemini', 'openai', 'mock', 'offline'], run: () => setIsSettingsOpen(true) },
+      ...(isDesktop
+        ? [{ id: 'apikey', group: 'Configuração', label: 'Gerenciar chave Gemini', icon: Key, run: () => setApiKeyModal({ open: true, mandatory: false }) }]
+        : []),
+      { id: 'billing', group: 'Configuração', label: 'Carteira de créditos', icon: Wallet, keywords: ['creditos', 'saldo'], run: openBilling },
+    ],
+    [handleNewProject, gen.goToTheme, startGeneration, isDesktop, openBilling]
+  );
 
-  const handleReset = useCallback(() => {
-    setProject(null);
-    setCurrentStepIndex(0);
-    setErrorDetail(null);
-    setStep('selection');
-    setViewingRegistry(false);
-  }, []);
+  const transition = reduceMotion ? { duration: 0 } : { duration: 0.22, ease: 'easeOut' as const };
+  const showStepper = view === 'studio';
+  const includesTheme = gen.step === 'theme' || gen.lastRequest?.type === 'store';
 
   return (
-    <div className="min-h-screen bg-[#0B0F17] text-gray-100 flex flex-col justify-between font-sans selection:bg-cyan-500/20 selection:text-cyan-300">
-      {/* Top Header - Top Bar Contract */}
-      <header className="w-full bg-[#0D131F]/90 backdrop-blur-md border-b border-gray-800/80 px-6 py-3.5 flex flex-row justify-between items-center z-40 sticky top-0">
-        {/* Zone 1: Brand */}
-        <div className="flex items-center gap-3">
-          <div 
-            onClick={handleReset}
-            className="flex items-center gap-2 cursor-pointer group"
-          >
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-black font-black text-sm shadow-md shadow-cyan-500/10">
-              <Layers className="w-4 h-4 text-black" />
+    <TooltipProvider delayDuration={300}>
+      <div className="flex min-h-screen bg-background text-gray-100 selection:bg-cyan-500/25 selection:text-cyan-100">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded-lg focus:bg-cyan-500 focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-gray-950"
+        >
+          Pular para o conteúdo
+        </a>
+
+        <AppSidebar
+          view={view}
+          onNavigate={setView}
+          onNewProject={handleNewProject}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenApiKey={isDesktop ? () => setApiKeyModal({ open: true, mandatory: false }) : undefined}
+          onOpenBilling={openBilling}
+          onOpenCommand={() => setIsCommandOpen(true)}
+        />
+
+        <div className="app-backdrop flex min-w-0 flex-1 flex-col">
+          {/* Top bar: brand + compact actions on small screens, wizard progress on all sizes */}
+          <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-gray-800/80 bg-background/80 px-4 backdrop-blur-md md:px-8">
+            <div className="flex min-w-0 items-center gap-3">
+              <button type="button" onClick={handleNewProject} className="flex items-center gap-2 lg:hidden" aria-label="ScaffoldEngine — início">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-400 to-blue-600">
+                  <Layers className="h-4 w-4 text-gray-950" />
+                </span>
+              </button>
+              {showStepper ? (
+                <WizardStepper step={gen.step} includesTheme={includesTheme} hasError={Boolean(gen.error)} />
+              ) : (
+                <h1 className="text-sm font-semibold text-white">Templates Hub</h1>
+              )}
             </div>
-            <div>
-              <span className="text-base font-bold tracking-tight text-white group-hover:text-cyan-400 transition-colors">
-                ScaffoldEngine
-              </span>
-              <span className="text-xs text-gray-500 ml-2 hidden sm:inline">
-                Desktop Studio · v2.4
-              </span>
+            <div className="flex items-center gap-1.5 lg:hidden">
+              <CreditsCard compact onOpenBilling={openBilling} />
+              <Button variant="ghost" size="icon" onClick={() => setView(view === 'registry' ? 'studio' : 'registry')} aria-label="Alternar Templates Hub">
+                <LayoutGrid />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={() => setIsSettingsOpen(true)} aria-label="Provedores de IA">
+                <Sliders />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={() => setIsCommandOpen(true)} aria-label="Abrir paleta de comandos">
+                <CommandIcon />
+              </Button>
             </div>
-          </div>
+          </header>
+
+          <main id="main" className="flex-1 px-4 py-6 md:px-8 md:py-8">
+            <div className="mx-auto w-full max-w-7xl">
+              {/* Enter-only transition: no exit/"wait" phase, so the next screen mounts immediately
+                  even when rAF is throttled (hidden/minimized window). */}
+                <motion.div
+                  key={view === 'registry' ? 'registry' : gen.step}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={transition}
+                >
+                  <Suspense fallback={<ScreenFallback />}>
+                  {view === 'registry' ? (
+                    <TemplateRegistryDashboard />
+                  ) : (
+                    <>
+                      {gen.step === 'selection' && <SelectionScreen onSelect={handleSelectProject} />}
+                      {gen.step === 'theme' && (
+                        <ThemeScreen onGenerate={(theme) => startGeneration('store', theme)} onBack={handleNewProject} />
+                      )}
+                      {gen.step === 'generating' && (
+                        <GenerationScreen
+                          projectName={gen.project?.name ?? gen.lastRequest?.theme ?? 'Novo projeto'}
+                          lifecycleSteps={gen.steps}
+                          currentStepIndex={gen.currentStepIndex}
+                          activity={gen.activity}
+                          errorDetail={gen.error}
+                          onRetry={() => void gen.retry().catch((e) => toast.error(e instanceof Error ? e.message : String(e)))}
+                          onBack={handleNewProject}
+                          onOpenSettings={() => setIsSettingsOpen(true)}
+                        />
+                      )}
+                      {gen.step === 'result' && gen.project && (
+                        <ResultScreenErrorBoundary onReset={handleNewProject} projectFiles={gen.project.files} projectName={gen.project.name}>
+                          <ResultScreen projectType={gen.project.type} projectFiles={gen.project.files} onReset={handleNewProject} />
+                        </ResultScreenErrorBoundary>
+                      )}
+                    </>
+                  )}
+                  </Suspense>
+                </motion.div>
+            </div>
+          </main>
         </div>
-        
-        {/* Zone 2 & 3: Actions */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            onClick={() => setViewingRegistry(!viewingRegistry)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${
-              viewingRegistry 
-                ? 'bg-cyan-500 text-black border-cyan-400 font-bold'
-                : 'bg-gray-900 hover:bg-gray-850 text-gray-300 border-gray-800 hover:border-gray-700'
-            }`}
-          >
-            {viewingRegistry ? (
-              <><LayoutGrid className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Projetos</span> Base</>
-            ) : (
-              <><Layers className="w-3.5 h-3.5 text-cyan-400" /> <span className="hidden sm:inline">Templates</span> Hub</>
-            )}
-          </button>
 
-          {PlatformAdapter.isTauriApp() && (
-            <button
-              onClick={() => {
-                setIsKeyMandatory(false);
-                setIsApiKeyModalOpen(true);
-              }}
-              className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-850 text-gray-300 hover:text-white px-3 py-1.5 border border-gray-800 hover:border-gray-700 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer"
-              title="Gerenciar Chave de API Gemini no Windows Credential Manager (BYOK)"
-            >
-              <Key className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">Chave</span> Gemini
-            </button>
-          )}
-
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="flex items-center gap-1.5 bg-gray-900 hover:bg-gray-850 text-gray-300 hover:text-white px-3 py-1.5 border border-gray-800 hover:border-gray-700 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer"
-            title="Configure Provedores (Gemini, OpenAI, Mock)"
-          >
-            <Sliders className="w-3.5 h-3.5 text-gray-400" />
-            <span className="hidden sm:inline">Configurar</span> APIs
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content Pane */}
-      <main className="flex-1 flex items-center justify-center p-4 md:p-8">
-        <div className="w-full max-w-7xl mx-auto flex flex-col justify-center overflow-hidden">
-          <AnimatePresence mode="wait">
-            {viewingRegistry ? (
-              <motion.div
-                key="registry"
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                transition={{ duration: 0.25, ease: 'easeOut' }}
-              >
-                <TemplateRegistryDashboard />
-              </motion.div>
-            ) : (
-              <motion.div
-                key={step}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
-                transition={{ duration: 0.25, ease: 'easeOut' }}
-                className="w-full"
-              >
-                {step === 'selection' && <SelectionScreen onSelect={handleSelectProject} />}
-                {step === 'theme' && <ThemeScreen onGenerate={handleGenerateProducts} />}
-                {step === 'generating' && (
-                  <div className="w-full">
-                    <GenerationScreen
-                      projectName={project ? project.name : (step === 'theme' ? 'Loja Modelo' : 'Carregando...')}
-                      lifecycleSteps={lifecycleSteps}
-                      currentStepIndex={currentStepIndex}
-                      errorDetail={errorDetail}
-                    />
-                    {errorDetail && (
-                      <div className="mt-6 text-center">
-                        <button
-                          onClick={handleReset}
-                          className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors text-sm cursor-pointer"
-                        >
-                          Voltar ao Início
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {step === 'result' && project && (
-                  <ResultScreenErrorBoundary
-                    onReset={handleReset}
-                    projectFiles={project.files}
-                    projectName={project.name}
-                  >
-                    <ResultScreen projectType={project.type} projectFiles={project.files} onReset={handleReset} />
-                  </ResultScreenErrorBoundary>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </main>
-
-      {/* Footer detailing project nature */}
-      <footer className="w-full p-4 border-t border-gray-800 bg-gray-900/60 text-center text-xs text-gray-500">
-        <p>Projeto de Orquestração Estruturada — Projetado para portabilidade direta fora deste workspace.</p>
-      </footer>
-
-      {/* Global settings configuration modal */}
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-
-      {/* BYOK Desktop API Key Modal */}
-      <ApiKeyModal
-        isOpen={isApiKeyModalOpen}
-        onClose={() => {
-          setIsApiKeyModalOpen(false);
-          setIsKeyMandatory(false);
-        }}
-        isMandatory={isKeyMandatory}
-      />
-    </div>
+        <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+        <ApiKeyModal
+          isOpen={apiKeyModal.open}
+          isMandatory={apiKeyModal.mandatory}
+          onClose={() => setApiKeyModal({ open: false, mandatory: false })}
+        />
+        <BillingDialog open={isBillingOpen} onOpenChange={setIsBillingOpen} />
+        <CommandPalette open={isCommandOpen} onOpenChange={setIsCommandOpen} actions={paletteActions} />
+        <Toaster theme="dark" position="bottom-right" richColors closeButton />
+      </div>
+    </TooltipProvider>
   );
 };
 
 export default App;
-

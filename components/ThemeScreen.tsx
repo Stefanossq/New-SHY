@@ -11,11 +11,13 @@ import {
   Shirt, 
   Gamepad2, 
   Leaf,
-  Loader2
+  Loader2,
+  ArrowLeft
 } from 'lucide-react';
 
 interface ThemeScreenProps {
   onGenerate: (theme: string) => Promise<void>;
+  onBack?: () => void;
 }
 
 interface ThemePreset {
@@ -23,7 +25,7 @@ interface ThemePreset {
   themeValue: string;
   title: string;
   description: string;
-  icon: any;
+  icon: React.ElementType;
   accent: string;
 }
 
@@ -78,7 +80,7 @@ const PRESETS: ThemePreset[] = [
   },
 ];
 
-const ThemeScreen: React.FC<ThemeScreenProps> = ({ onGenerate }) => {
+const ThemeScreen: React.FC<ThemeScreenProps> = ({ onGenerate, onBack }) => {
   const [customTheme, setCustomTheme] = useState('');
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -93,8 +95,10 @@ const ThemeScreen: React.FC<ThemeScreenProps> = ({ onGenerate }) => {
     setIsLoading(true);
     try {
       await onGenerate(themeToUse);
-    } catch (err: any) {
-      setError(err.message || 'Falha na inicialização do tema.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Falha na inicialização do tema.');
+    } finally {
+      // If generation could not start (e.g. no credits) the screen stays mounted — unlock it.
       setIsLoading(false);
     }
   };
@@ -116,7 +120,16 @@ const ThemeScreen: React.FC<ThemeScreenProps> = ({ onGenerate }) => {
     <div className="w-full max-w-4xl mx-auto flex flex-col space-y-8 py-4 animate-fade-in">
       
       {/* Header */}
-      <div className="text-center space-y-2">
+      <div className="text-center space-y-2 relative">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="absolute left-0 top-0 inline-flex items-center gap-1 text-xs font-semibold text-gray-400 hover:text-white cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" /> Templates
+          </button>
+        )}
         <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 rounded-lg text-xs font-semibold">
           <Store className="w-3.5 h-3.5" />
           <span>Configuração do E-Commerce</span>
@@ -136,10 +149,13 @@ const ThemeScreen: React.FC<ThemeScreenProps> = ({ onGenerate }) => {
           const isCurrentLoading = isLoading && selectedPreset === preset.id;
 
           return (
-            <div
+            <button
+              type="button"
               key={preset.id}
-              onClick={() => !isLoading && handlePresetSelect(preset)}
-              className={`bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col justify-between transition-all duration-200 hover:-translate-y-1 cursor-pointer group ${preset.accent} hover:shadow-lg ${
+              disabled={isLoading}
+              aria-busy={isCurrentLoading}
+              onClick={() => handlePresetSelect(preset)}
+              className={`text-left bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col justify-between transition-all duration-200 hover:-translate-y-1 cursor-pointer group ${preset.accent} hover:shadow-lg ${
                 isLoading ? 'opacity-60 pointer-events-none' : ''
               }`}
             >
@@ -163,7 +179,7 @@ const ThemeScreen: React.FC<ThemeScreenProps> = ({ onGenerate }) => {
                   </p>
                 </div>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -180,8 +196,11 @@ const ThemeScreen: React.FC<ThemeScreenProps> = ({ onGenerate }) => {
       {/* Custom Theme Input */}
       <form onSubmit={handleSubmitCustom} className="bg-gray-900 border border-gray-800 rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <div className="relative flex-1">
+          <label htmlFor="custom-theme" className="sr-only">Nicho personalizado</label>
           <input
+            id="custom-theme"
             type="text"
+            maxLength={200}
             value={customTheme}
             onChange={(e) => setCustomTheme(e.target.value)}
             disabled={isLoading}
@@ -209,7 +228,7 @@ const ThemeScreen: React.FC<ThemeScreenProps> = ({ onGenerate }) => {
       </form>
 
       {error && (
-        <div className="p-3 bg-red-950/40 border border-red-900/50 rounded-lg text-red-300 text-xs text-center">
+        <div role="alert" className="p-3 bg-red-950/40 border border-red-900/50 rounded-lg text-red-300 text-xs text-center">
           {error}
         </div>
       )}

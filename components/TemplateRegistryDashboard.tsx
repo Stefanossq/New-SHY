@@ -3,6 +3,8 @@ import {
   GitBranch, Code2, Layers, Key, Server, PlusCircle, CheckCircle, AlertTriangle, 
   Trash, ArrowRight, Download, RefreshCw, FileText
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { ConfirmDialog } from './ui/dialog';
 
 interface TemplateRegistry {
   id: string;
@@ -133,18 +135,27 @@ export const TemplateRegistryDashboard: React.FC = () => {
     }
   };
 
+  const [pendingRemoval, setPendingRemoval] = useState<TemplateRegistry | null>(null);
+
+  // Removal is restricted to the unlocked creator mode; confirmation uses an accessible
+  // dialog instead of the blocking window.prompt/alert pair.
   const handleRemove = (id: string) => {
-    // Only creator can remove templates as well. Show alert if not authorized.
-    const confirmCode = prompt("Esta é uma ação restrita. Digite a Chave do Criador ('criador') para confirmar a exclusão deste template:");
-    if (confirmCode?.toLowerCase() === 'criador' || confirmCode?.toLowerCase() === 'admin') {
-      setRegistries(prev => prev.filter(r => r.id !== id));
-    } else if (confirmCode !== null) {
-      alert("Chave inválida. Exclusão de template cancelada.");
+    if (!isAuthenticated) {
+      toast.error('Ação restrita', { description: 'Desbloqueie o modo criador com a chave antes de remover templates.' });
+      return;
     }
+    setPendingRemoval(registries.find((r) => r.id === id) ?? null);
+  };
+
+  const confirmRemoval = () => {
+    if (!pendingRemoval) return;
+    setRegistries((prev) => prev.filter((r) => r.id !== pendingRemoval.id));
+    toast.success('Template removido', { description: pendingRemoval.name });
+    setPendingRemoval(null);
   };
 
   return (
-    <div className="bg-gray-800 border border-gray-750/50 rounded-lg p-5 space-y-6">
+    <div className="bg-gray-900/70 border border-gray-800 rounded-2xl p-5 md:p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-700/50 pb-4">
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-gray-100 flex items-center gap-2">
@@ -413,6 +424,15 @@ export const TemplateRegistryDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        open={pendingRemoval !== null}
+        onOpenChange={(open) => !open && setPendingRemoval(null)}
+        title="Remover template do registry?"
+        description={pendingRemoval ? `"${pendingRemoval.name}" deixará de aparecer no hub de templates.` : ''}
+        confirmLabel="Remover"
+        destructive
+        onConfirm={confirmRemoval}
+      />
     </div>
   );
 };

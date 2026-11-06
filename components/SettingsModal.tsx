@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { getAIConfig, saveAIConfig, AIServiceConfig, AIProviderType } from "../lib/aiService";
-import { SlidersHorizontal, X, Check, Key, Globe, Cpu, ExternalLink } from "lucide-react";
+import { SlidersHorizontal, Check, Cpu } from "lucide-react";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Button } from "./ui/button";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -18,55 +21,50 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    saveAIConfig(config);
+    try {
+      saveAIConfig(config);
+    } catch (err) {
+      toast.error("Não foi possível salvar a configuração", { description: err instanceof Error ? err.message : String(err) });
+      return;
+    }
     setSaveSuccess(true);
+    toast.success("Provedor de IA atualizado", { description: config.provider === "mock" ? "Modo offline ativo." : `Usando ${config.provider}.` });
     setTimeout(() => {
       setSaveSuccess(false);
       onClose();
-    }, 1000);
+    }, 700);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-gray-900 border border-gray-800 rounded-xl max-w-md w-full overflow-hidden shadow-2xl relative">
-        {/* Header */}
-        <div className="p-5 border-b border-gray-800 flex justify-between items-center bg-gray-950">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
-              <SlidersHorizontal className="w-4 h-4" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-400">
+              <SlidersHorizontal className="h-4 w-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">
-                Configurações do Motor de IA
-              </h3>
-              <p className="text-xs text-gray-400">
-                Provedores para geração de catálogos e assets
-              </p>
+              <DialogTitle>Configurações do Motor de IA</DialogTitle>
+              <DialogDescription>Provedores para geração de catálogos e assets</DialogDescription>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        </DialogHeader>
 
         {/* Form */}
         <form onSubmit={handleSave} className="p-6 space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-400 mb-2">
+            <p className="block text-xs font-semibold text-gray-400 mb-2">
               Provedor Ativo
-            </label>
-            <div className="grid grid-cols-3 gap-2">
+            </p>
+            <div role="radiogroup" aria-label="Provedor ativo" className="grid grid-cols-3 gap-2">
               {(["gemini", "openai", "mock"] as AIProviderType[]).map((p) => (
                 <button
                   key={p}
                   type="button"
+                  role="radio"
+                  aria-checked={config.provider === p}
                   onClick={() => setConfig({ ...config, provider: p })}
                   className={`py-2 px-3 text-xs font-semibold rounded-lg border transition-all duration-200 capitalize cursor-pointer ${
                     config.provider === p
@@ -103,10 +101,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                   Compatível com qualquer API compatível com o protocolo OpenAI.
                 </p>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-300 mb-1">
+                  <label htmlFor="openai-key" className="block text-xs font-semibold text-gray-300 mb-1">
                     API Key
                   </label>
                   <input
+                    id="openai-key"
                     type="password"
                     placeholder="sk-..."
                     value={config.openaiKey || ""}
@@ -115,10 +114,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-300 mb-1">
+                  <label htmlFor="openai-endpoint" className="block text-xs font-semibold text-gray-300 mb-1">
                     Endpoint Base
                   </label>
                   <input
+                    id="openai-endpoint"
                     type="text"
                     placeholder="https://api.openai.com/v1"
                     value={config.openaiEndpoint || ""}
@@ -127,10 +127,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-300 mb-1">
+                  <label htmlFor="openai-model" className="block text-xs font-semibold text-gray-300 mb-1">
                     Modelo
                   </label>
                   <input
+                    id="openai-model"
                     type="text"
                     placeholder="gpt-4o-mini"
                     value={config.openaiModel || ""}
@@ -156,19 +157,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
 
           {/* Footer actions */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-800 mt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white transition-colors"
-            >
+            <Button variant="ghost" onClick={onClose}>
               Cancelar
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 text-xs font-semibold bg-cyan-500 hover:bg-cyan-400 text-black rounded-lg transition-colors cursor-pointer"
-            >
-              Salvar Configuração
-            </button>
+            </Button>
+            <Button type="submit" variant="primary">
+              Salvar configuração
+            </Button>
           </div>
         </form>
 
@@ -182,8 +176,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             <p className="text-xs text-gray-400">O provedor foi salvo no armazenamento local.</p>
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

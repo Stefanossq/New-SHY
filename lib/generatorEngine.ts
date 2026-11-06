@@ -10,6 +10,26 @@ export interface GenerationProgress {
   message: string;
 }
 
+export interface GenerationOptions {
+  /** Artificial pacing between UI steps (ms). Tests pass 0 for speed. */
+  stepDelayMs?: number;
+}
+
+export const STORE_AI_STEPS = [
+  "Carregando configurações e checando conexão com Provedor de IA",
+  "Buscando informações do segmento e gerando catálogo de produtos",
+  "Gerando fotos de estúdio profissionais para cada produto via IA",
+  "Estruturando Schema de dados do catálogo dinâmico",
+] as const;
+
+/** Single source of truth for the step list shown in the UI and executed by the engine. */
+export const getLifecycleSteps = (projectType: ProjectType): string[] => {
+  const template = PROJECT_TEMPLATES[projectType];
+  return projectType === "store" ? [...STORE_AI_STEPS, ...template.lifecycle] : [...template.lifecycle];
+};
+
+const sleep = (ms: number) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
+
 export interface GenerationResult {
   type: ProjectType;
   name: string;
@@ -23,11 +43,15 @@ export interface GenerationResult {
 export const orchestrateGeneration = async (
   projectType: ProjectType,
   theme: string,
-  onProgress: (progress: GenerationProgress) => void
+  onProgress: (progress: GenerationProgress) => void,
+  options: GenerationOptions = {}
 ): Promise<GenerationResult> => {
   const template = PROJECT_TEMPLATES[projectType];
+  if (!template) throw new Error(`Template desconhecido: ${projectType}`);
+  const delay = options.stepDelayMs ?? 500;
+  // Copy-on-write: the shared template registry is never mutated by a generation run.
   const updatedFiles = { ...template.files };
-  const lifecycle = [...template.lifecycle];
+  const lifecycle = getLifecycleSteps(projectType);
 
   if (projectType === "blog" || projectType === "travel") {
     // For blog or travel, it's virtually instant, but we simulate steps to give real feedback
@@ -37,7 +61,7 @@ export const orchestrateGeneration = async (
         status: "loading",
         message: `${lifecycle[i]}...`,
       });
-      await new Promise((r) => setTimeout(r, 600));
+      await sleep(delay);
       onProgress({
         stepIndex: i,
         status: "success",
@@ -54,23 +78,19 @@ export const orchestrateGeneration = async (
   }
 
   // Segment: Store configuration (highly dynamic with AI products & images)
-  const storeSteps = [
-    "Carregando configurações e checando conexão com Provedor de IA",
-    "Buscando informações do segmento e gerando catálogo de produtos",
-    "Gerando fotos de estúdio profissionais para cada produto via IA",
-    "Estruturando Schema de dados do catálogo dinâmico",
-    ...template.lifecycle,
-  ];
+  const storeSteps = lifecycle;
+  let activeStep = 0;
 
-  // Helper to log steps
+  // Helper to log steps (remembers the active step so failures point at the right one)
   const updateStep = (index: number, status: GenerationStatus, message: string) => {
+    activeStep = index;
     onProgress({ stepIndex: index, status, message });
   };
 
   try {
     // Step 0: Check config
     updateStep(0, "loading", storeSteps[0]);
-    await new Promise((r) => setTimeout(r, 400));
+    await sleep(Math.round(delay * 0.8));
     updateStep(0, "success", `${storeSteps[0]} - OK!`);
 
     // Step 1: Generate Catalog Products
@@ -118,19 +138,19 @@ export const orchestrateGeneration = async (
         imagePaths.push(`https://placehold.co/300x300/1f2937/d1d5db?text=${encodeURIComponent(text)}`);
       }
     }
-    updateStep(2, "success", `${storeSteps[2]} - 4 imagens geradas com sucesso.`);
+    updateStep(2, "success", `${storeSteps[2]} - ${products.length} imagens geradas com sucesso.`);
 
     // Step 3: Scaffold Schema to Convex Database
     updateStep(3, "loading", storeSteps[3]);
     const productsContent = createConvexProductsContent(products, imagePaths);
     updatedFiles["convex/products.ts"] = productsContent;
-    await new Promise((r) => setTimeout(r, 500));
+    await sleep(delay);
     updateStep(3, "success", `${storeSteps[3]} - schema gerado em convex/products.ts`);
 
     // Remaining standard setup steps
     for (let i = 4; i < storeSteps.length; i++) {
       updateStep(i, "loading", `${storeSteps[i]}...`);
-      await new Promise((r) => setTimeout(r, 500));
+      await sleep(delay);
       updateStep(i, "success", `${storeSteps[i]} concluído ✅`);
     }
 
@@ -143,7 +163,7 @@ export const orchestrateGeneration = async (
   } catch (error: any) {
     console.error("Orchestration failed:", error);
     onProgress({
-      stepIndex: 1,
+      stepIndex: activeStep,
       status: "error",
       message: `Erro na geração: ${error.message || error}`,
     });
