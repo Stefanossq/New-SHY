@@ -1,0 +1,34 @@
+
+.container { max-width: 1000px; margin: 4rem auto; padding: 0 20px; }
+.grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 4rem; }
+.empty { text-align: center; margin-top: 4rem; color: var(--text-muted); }
+
+.sectionTitle { font-size: 1.2rem; margin-bottom: 1.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+.fieldGroup { margin-bottom: 1rem; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+
+/* Stripe-like Inputs */
+.stripeElement { 
+    background: var(--bg-input); border: 1px solid var(--border-light); 
+    border-radius: 4px; padding: 0 10px; display: flex; align-items: center; 
+    transition: all 0.2s; margin-bottom: 1rem;
+}
+.stripeElement input { border: none; background: transparent; width: 100%; padding: 12px 5px; font-family: monospace; font-size: 1.1rem; }
+.stripeElement:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.cardIcon { color: var(--text-muted); margin-right: 5px; }
+
+.stripeElement.invalid { border-color: var(--error); color: var(--error); }
+.stripeElement.invalid .cardIcon { color: var(--error); }
+.stripeElement.valid { border-color: var(--success); }
+.stripeElement.valid .cardIcon { color: var(--success); }
+
+.stripeInput { font-family: monospace; letter-spacing: 1px; }
+
+.secureBadge { display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 0.75rem; color: var(--text-muted); margin-top: 15px; }
+
+.summary { background: var(--bg-card); padding: 2rem; border-radius: 4px; border: 1px solid var(--border-light); height: fit-content; }
+.summary h3 { margin-bottom: 1.5rem; font-size: 1.1rem; }
+.item { display: flex; justify-content: space-between; margin-bottom: 10px; color: var(--text-muted); font-size: 0.9rem; }
+.totalRow { display: flex; justify-content: space-between; margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-light); font-weight: 700; font-size: 1.2rem; }
+
+@media (max-width: 768px) { .grid { grid-template-columns: 1fr; gap: 2rem; } .summary { order: -1; } }

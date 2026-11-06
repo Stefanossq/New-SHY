@@ -1,0 +1,5 @@
+
+.footer { border-top: 1px solid var(--border-light); padding: 40px 0; margin-top: auto; background: var(--bg-card); }
+.content { max-width: var(--container-width); margin: 0 auto; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 0.9rem; }
+.links { display: flex; gap: 20px; }
+@media(max-width: 768px) { .content { flex-direction: column; gap: 20px; text-align: center; } }

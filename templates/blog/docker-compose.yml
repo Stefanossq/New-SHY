@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  gateway:
+    image: traefik:v3.0
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    depends_on:
+      - app-service
+      - redis-cache
+
+  app-service:
+    build: .
+    deploy:
+      replicas: 3
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis-cache:6379
+      - EVENT_BUS_BROKER=eventbus:9092
+    depends_on:
+      - redis-cache
+      - eventbus
+
+  redis-cache:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  eventbus:
+    image: vectorized/redpanda:latest
+    ports:
+      - "9092:9092"

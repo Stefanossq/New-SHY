@@ -1,0 +1,6 @@
+{
+  "summary": "Plano de implementação para organização dos diretórios do repositório, desacoplamento dos projetos templates em diretórios individuais (templates/store, templates/blog, templates/travel), padronização da dependência exclusiva da chave de API do Gemini no backend, e criação de suíte automatizada de testes e execução individual dos templates.",
+  "updatedAt": "2026-11-06T18:35:00.648316407Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

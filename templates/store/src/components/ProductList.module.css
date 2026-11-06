@@ -1,0 +1,6 @@
+
+.searchContainer { margin-bottom: 3rem; display: flex; justify-content: center; }
+.searchInput { width: 100%; max-width: 400px; text-align: center; background: transparent; border: none; border-bottom: 1px solid var(--border-light); border-radius: 0; padding: 10px; font-size: 1.1rem; }
+.searchInput:focus { border-color: var(--text-main); }
+.productListGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 3rem; }
+.noProducts { text-align: center; color: var(--text-muted); grid-column: 1 / -1; }

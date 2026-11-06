@@ -1,0 +1,8 @@
+{
+  "name": "SaaS Prototype Orchestration Engine",
+  "description": "Plataforma de orquestração de protótipos de código e arquitetura distribuída com Live Preview, Topologia de Microsserviços, Telemetria em Tempo Real, Event Bus, Schemas SQL/Prisma, Sincronização direta com GitHub e Deploy na Vercel.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
