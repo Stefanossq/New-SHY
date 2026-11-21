@@ -1,24 +1,30 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
+# Dependências e builds
 node_modules
 dist
+cli/dist
 dist-ssr
-*.local
+*.tsbuildinfo
 
-# Editor directories and files
+# Projetos gerados pela verificação (npm run verify:templates)
+.verify
+.verify-*.log
+
+# Variáveis de ambiente
+.env
+.env.*
+!.env.example
+
+# Tauri
+src-tauri/target
+src-tauri/gen
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / SO
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+Thumbs.db

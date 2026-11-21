@@ -4,6 +4,16 @@ import { useAction, useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { Send, Save, Loader, MapPin, Calendar, DollarSign, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { ConvexError } from 'convex/values';
+
+/** Mensagem legível de um erro vindo do Convex. */
+const errorMessage = (err: unknown) => {
+  if (err instanceof ConvexError) return String(err.data);
+  const msg = err instanceof Error ? err.message : String(err);
+  // Erros lançados no servidor chegam como "[CONVEX ...] Uncaught Error: <mensagem> at ..."
+  const match = msg.match(/Uncaught Error: (.*?)(\n|\s+at\s|$)/);
+  return match ? match[1] : 'Algo deu errado. Tente novamente.';
+};
 
 export default function DashboardPage() {
   // CHAT STATE
@@ -33,7 +43,9 @@ export default function DashboardPage() {
     try {
         const history = messages.map(m => ({ role: m.role, parts: [{text: m.text}] }));
         const res = await sendMessage({ message: txt, history });
-        setMessages(p => [...p, {role: 'model', text: res}]);
+        setMessages(p => [...p, {role: 'model', text: res ?? ''}]);
+    } catch (err) {
+        setMessages(p => [...p, {role: 'model', text: errorMessage(err)}]);
     } finally { setChatLoading(false); }
   };
 
@@ -41,15 +53,21 @@ export default function DashboardPage() {
     e.preventDefault();
     setPlanLoading(true);
     try {
-        const json = await generate(form);
+        const json = await generate({ ...form, days: Number(form.days) });
         setResult(JSON.parse(json));
+    } catch (err) {
+        alert(errorMessage(err));
     } finally { setPlanLoading(false); }
   };
 
   const handleSave = async () => {
     if(!result) return;
-    await saveTrip({ ...form, days: Number(form.days), itinerary: JSON.stringify(result), title: result.title });
-    router.push('/my-trips');
+    try {
+        await saveTrip({ ...form, days: Number(form.days), itinerary: JSON.stringify(result), title: result.title });
+        router.push('/my-trips');
+    } catch (err) {
+        alert(errorMessage(err));
+    }
   };
 
   return (

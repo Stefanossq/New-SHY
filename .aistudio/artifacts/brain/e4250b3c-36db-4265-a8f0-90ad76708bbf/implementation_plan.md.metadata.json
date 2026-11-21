@@ -1,6 +1,0 @@
-{
-  "summary": "Plano de implementação para conversão da aplicação para o modelo BYOK Desktop (Tauri v2 + Windows) com suporte ao Windows Credential Manager (keyring), chamadas nativas em Rust aos endpoints do Gemini 3.8 Flash, fallback automático e compatibilidade transparente com o modo web/dev atual, e guia completo para geração do .exe e instalador .msi.",
-  "updatedAt": "2026-11-06T19:11:43.351619100Z",
-  "requestFeedback": true,
-  "userFacing": true
-}

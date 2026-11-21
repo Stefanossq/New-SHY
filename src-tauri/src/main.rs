@@ -1,6 +1,6 @@
-// Prevents additional console window on Windows in release
+// Evita a janela de console extra no Windows em release.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    saas_prototype_engine_lib::run();
+    new_shy_lib::run();
 }

@@ -6,12 +6,14 @@ import { ClerkProvider, SignInButton, SignedIn, SignedOut, UserButton } from "@c
 import { dark } from "@clerk/themes";
 import WelcomeChatBot from "@/components/WelcomeChatBot";
 import Link from "next/link";
+import { SITE } from "@/lib/site";
+import { themeVars } from "@/lib/theme";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Terminal Blog AI",
-  description: "Blog gerado por IA com tema cyberpunk.",
+  title: SITE.name,
+  description: SITE.description,
 };
 
 export default function RootLayout({
@@ -22,13 +24,14 @@ export default function RootLayout({
   return (
     <ClerkProvider appearance={{ baseTheme: dark }}>
       <html lang="pt-BR">
-        <body className={inter.className}>
+        <body className={inter.className} style={themeVars(SITE.palette)}>
           <ConvexClientProvider>
-            <header className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0', borderBottom: '1px solid #333', marginBottom: '20px' }}>
+            <header className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0', borderBottom: '1px solid var(--border-color)', marginBottom: '20px' }}>
                 <Link href="/" style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--color-accent)' }}>
-                    &gt;_ TERMINAL_BLOG
+                    &gt;_ {SITE.name}
                 </Link>
                 <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                    {SITE.features.payments && <Link href="/premium">Seja apoiador</Link>}
                     <SignedIn>
                         <UserButton />
                     </SignedIn>

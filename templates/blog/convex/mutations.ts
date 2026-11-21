@@ -1,5 +1,6 @@
 import { internalMutation, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { requireAdmin } from "./authz";
 
 // --- Internal Mutations (Uso interno/AI) ---
 
@@ -119,18 +120,17 @@ export const likePost = mutation({
 });
 
 
-// --- Protected Mutations (Admin) ---
+// --- Mutations de administrador (ADMIN_USER_IDS) ---
 
-export const deletePostPublic = mutation({
+export const deletePost = mutation({
   args: { id: v.id("posts") },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Acesso negado.");
+    await requireAdmin(ctx);
     await ctx.db.delete(args.id);
   },
 });
 
-export const updatePostPublic = mutation({
+export const updatePost = mutation({
   args: {
     id: v.id("posts"),
     title: v.string(),
@@ -139,8 +139,7 @@ export const updatePostPublic = mutation({
     image_url: v.string(),
   },
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Acesso negado.");
+    await requireAdmin(ctx);
     const { id, ...updates } = args;
     await ctx.db.patch(id, updates);
   },

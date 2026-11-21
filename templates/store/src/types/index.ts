@@ -1,20 +1,19 @@
-import { Doc, Id } from "../convex/_generated/dataModel";
+import { Doc } from "@/convex/_generated/dataModel";
 
-// Explicitly define Product interface to ensure TS knows about 'price' and other fields
-// even if generated types are missing or incomplete during initial build.
-export interface Product {
-  _id: Id<"products">;
-  _creationTime: number;
-  name: string;
-  price: number;
-  description: string;
-  category: string;
-  stock: number;
-  imageUrl: string;
-}
-
+export type Product = Doc<"products">;
 export type Review = Doc<"reviews">;
+export type Order = Doc<"sales">;
 
 export type CartItem = Product & {
   quantity: number;
 };
+
+export const ORDER_STATUS_LABEL: Record<Order["status"], string> = {
+  placed: "Pedido recebido (pagamento na entrega)",
+  pending_payment: "Aguardando confirmação do pagamento",
+  paid: "Pagamento aprovado",
+  cancelled: "Cancelado",
+};
+
+export const formatBRL = (value: number) =>
+  value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });

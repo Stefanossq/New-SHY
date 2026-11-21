@@ -6,10 +6,11 @@ import Link from "next/link";
 import { SignedIn, SignedOut, RedirectToSignIn } from "@clerk/nextjs";
 
 export default function AdminDashboard() {
+  const isAdmin = useQuery(api.authz.amIAdmin);
   const posts = useQuery(api.jikan.getPosts);
   const auditLogs = useQuery(api.jikan.getAuditLogs);
-  const deletePost = useMutation(api.mutations.deletePostPublic);
-  const updatePost = useMutation(api.mutations.updatePostPublic);
+  const deletePost = useMutation(api.mutations.deletePost);
+  const updatePost = useMutation(api.mutations.updatePost);
   const generateContent = useAction(api.jikan.generateContent);
   const generateGame = useAction(api.jikan.generateGame);
   const generatePromo = useAction(api.jikan.generatePromoVideo);
@@ -52,7 +53,16 @@ export default function AdminDashboard() {
       }
   };
 
-  if (!posts) return <div className="container">Carregando painel...</div>;
+  if (!posts || isAdmin === undefined) return <div className="container">Carregando painel...</div>;
+  if (!isAdmin) {
+    return (
+      <div className="container">
+        <SignedOut><RedirectToSignIn /></SignedOut>
+        <h1>Acesso restrito</h1>
+        <p>Somente administradores (variável ADMIN_USER_IDS no Convex) acessam este painel.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container">

@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  generator:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:cli
+      # Roda o binário empacotado, como o `npx create-gato-pingado` faria, sem IA.
+      - run: node cli/dist/bin.js "$RUNNER_TEMP/loja" --app store --purpose "Loja de cafés especiais do sul de Minas" --payments --no-ai -y
+      - run: test -f "$RUNNER_TEMP/loja/convex/stripe.ts" && test -f "$RUNNER_TEMP/loja/src/lib/site.ts"
+      - run: npm pack --dry-run
+        working-directory: cli
+
+  # Para cada app: gera o .zip (mesma função da interface), descompacta e roda npm install, Convex, tsc e next build.
+  generated-apps:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [store, blog, travel]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run verify:templates -- --app ${{ matrix.app }} --build
+
+  desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci
+      - run: npm run build
+      - run: cargo test --manifest-path src-tauri/Cargo.toml

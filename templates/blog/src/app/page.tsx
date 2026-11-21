@@ -5,6 +5,7 @@ import { useState } from "react";
 import Link from 'next/link';
 import TeamCards from "@/components/TeamCards";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
+import { SITE } from "@/lib/site";
 
 export default function HomePage() {
   const generateTeam = useAction(api.jikan.generateTeam);
@@ -33,21 +34,21 @@ export default function HomePage() {
       
       {/* HERO SECTION */}
       <div>
-          <h1 style={{ fontSize: '3rem', marginBottom: '10px' }}>BLOG_PESSOAL_AI</h1>
+          <h1 style={{ fontSize: '3rem', marginBottom: '10px' }}>{SITE.copy.heroTitle}</h1>
           <p style={{ margin: '0 auto', maxWidth: '600px', color: 'var(--text-secondary)' }}>
-            Conectando Neural Net (Gemini) à Jikan API para gerar conteúdo otaku automaticamente.
+            {SITE.copy.heroSubtitle}
           </p>
       </div>
 
       <div style={{ display: 'flex', gap: '15px' }}>
-        <Link href="/posts" className="btn">ACESSAR BLOG</Link>
+        <Link href="/posts" className="btn">{SITE.copy.ctaLabel}</Link>
         <Link href="/admin/dashboard" className="btn" style={{ borderColor: 'var(--text-secondary)', color: 'var(--text-secondary)' }}>ADMIN</Link>
       </div>
 
       {/* TEAM GENERATOR SECTION */}
       <section className="card" style={{ width: '100%', maxWidth: '800px', marginTop: '20px', border: '1px solid var(--color-accent)' }}>
         <h2 style={{ fontSize: '1.2rem', marginBottom: '15px', color: 'var(--color-accent)' }}>
-            >_ GERADOR DE TIME ALEATÓRIO
+            &gt;_ GERADOR DE TIME ALEATÓRIO
         </h2>
         
         <p style={{ fontSize: '0.9rem', marginBottom: '20px', color: 'var(--text-secondary)' }}>

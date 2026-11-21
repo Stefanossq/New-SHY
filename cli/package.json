@@ -1,0 +1,30 @@
+{
+  "name": "create-gato-pingado",
+  "version": "1.0.0",
+  "description": "Gato Pingado pelo terminal: gera um app full-stack (Next.js + Convex + Clerk, Stripe opcional) personalizado com IA.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "create-gato-pingado": "dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "keywords": [
+    "create",
+    "nextjs",
+    "convex",
+    "clerk",
+    "stripe",
+    "gemini",
+    "scaffold"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Stefanossq/New-SHY.git",
+    "directory": "cli"
+  }
+}

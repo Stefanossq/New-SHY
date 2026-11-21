@@ -4,10 +4,12 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
 import ConvexClientProvider from "./ConvexClientProvider";
 import Header from "@/components/Header";
+import { SITE } from "@/lib/site";
+import { themeVars } from "@/lib/theme";
 
 export const metadata: Metadata = {
-  title: "Travel AI Noir",
-  description: "Planejamento de viagens minimalista",
+  title: SITE.name,
+  description: SITE.description,
 };
 
 export default function RootLayout({
@@ -18,7 +20,7 @@ export default function RootLayout({
   return (
     <ClerkProvider appearance={{ baseTheme: dark }}>
       <html lang="pt-BR">
-        <body>
+        <body style={themeVars(SITE.palette)}>
           <ConvexClientProvider>
             <Header />
             <main className="main-wrapper">

@@ -1,21 +1,22 @@
 {
-  "name": "loja-simples-convex",
+  "name": "loja",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@clerk/localizations": "^3.9.0",
-    "@clerk/nextjs": "^6.9.0",
-    "@google/genai": "^1.0.0",
-    "convex": "^1.17.0",
-    "next": "15.2.3",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "lucide-react": "^0.468.0"
+    "@clerk/nextjs": "^6.20.0",
+    "@clerk/themes": "^2.2.0",
+    "convex": "^1.27.0",
+    "lucide-react": "^0.468.0",
+    "next": "^15.5.7",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
   },
   "devDependencies": {
     "@types/node": "^20",

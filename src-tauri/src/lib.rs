@@ -1,358 +1,233 @@
+//! Backend do app desktop do Gato Pingado.
+//!
+//! Só faz o que o navegador não pode fazer com segurança:
+//! - guardar a chave Gemini no Gerenciador de Credenciais do Windows;
+//! - chamar a API Gemini com essa chave (prompts e schemas vêm da interface, em shared/content.ts);
+//! - gravar o projeto gerado direto numa pasta escolhida pelo usuário.
+
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use keyring::Entry;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::path::{Component, Path, PathBuf};
 use std::sync::LazyLock;
 use std::time::Duration;
+use tauri_plugin_dialog::DialogExt;
 
+// Mantido como "new-shy" para não perder chaves já salvas no Gerenciador de Credenciais.
 const SERVICE_NAME: &str = "new-shy";
-const USER_KEY_NAME: &str = "gemini_api_key";
-const GEMINI_API_ENDPOINT: &str = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent";
+const KEY_NAME: &str = "gemini_api_key";
+/// Mesmo padrão de shared/config.ts (DEFAULT_TEXT_MODEL).
+const TEST_MODEL: &str = "gemini-3.8-flash";
+const API_BASE: &str = "https://generativelanguage.googleapis.com/v1beta/models";
 
-static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+static HTTP: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_secs(120))
         .build()
-        .expect("Falha ao inicializar cliente HTTP com certificados nativos")
+        .expect("falha ao criar o cliente HTTP")
 });
 
-/// Retorna uma referência estática ao cliente HTTP compartilhado
-fn get_http_client() -> &'static reqwest::Client {
-    &HTTP_CLIENT
+fn entry() -> Result<Entry, String> {
+    Entry::new(SERVICE_NAME, KEY_NAME).map_err(|e| format!("Falha ao acessar o Gerenciador de Credenciais: {e}"))
 }
 
-/// Recupera a chave salva no keyring ou propaga erro explícito
-fn get_saved_key() -> Result<String, String> {
-    let entry = Entry::new(SERVICE_NAME, USER_KEY_NAME)
-        .map_err(|e| format!("Falha ao inicializar acesso ao Windows Credential Manager: {}", e))?;
-    entry
-        .get_password()
-        .map_err(|e| format!("Chave não encontrada no cofre seguro: {}", e))
-}
-
-/// Salva a chave de API no Windows Credential Manager via keyring
-#[tauri::command]
-pub fn save_api_key(key: String) -> Result<(), String> {
-    let trimmed = key.trim();
-    if trimmed.is_empty() {
-        return Err("A chave de API não pode estar vazia.".to_string());
+fn saved_key() -> Result<String, String> {
+    match entry()?.get_password() {
+        Ok(k) if !k.trim().is_empty() => Ok(k),
+        Ok(_) | Err(keyring::Error::NoEntry) => Err("Nenhuma chave Gemini salva. Clique em \"Chave Gemini\".".into()),
+        Err(e) => Err(format!("Erro ao ler a chave do cofre: {e}")),
     }
-    let entry = Entry::new(SERVICE_NAME, USER_KEY_NAME)
-        .map_err(|e| format!("Erro ao inicializar entrada no Windows Credential Manager: {}", e))?;
-    entry
-        .set_password(trimmed)
-        .map_err(|e| format!("Erro ao salvar chave no cofre seguro: {}", e))
 }
 
-/// Verifica se já existe uma chave salva e válida.
-/// Retorna Result<bool, String> para não mascarar falhas do Windows Credential Manager como 'sem chave'.
 #[tauri::command]
-pub fn has_api_key() -> Result<bool, String> {
-    let entry = Entry::new(SERVICE_NAME, USER_KEY_NAME)
-        .map_err(|e| format!("Falha ao conectar ao Windows Credential Manager: {}", e))?;
-    
-    match entry.get_password() {
+fn save_api_key(key: String) -> Result<(), String> {
+    let key = key.trim();
+    if key.is_empty() {
+        return Err("A chave não pode estar vazia.".into());
+    }
+    entry()?.set_password(key).map_err(|e| format!("Erro ao salvar a chave: {e}"))
+}
+
+#[tauri::command]
+fn has_api_key() -> Result<bool, String> {
+    match entry()?.get_password() {
         Ok(k) => Ok(!k.trim().is_empty()),
         Err(keyring::Error::NoEntry) => Ok(false),
-        Err(e) => Err(format!("Erro ao acessar cofre seguro de credenciais: {}", e)),
+        Err(e) => Err(format!("Erro ao acessar o cofre de credenciais: {e}")),
     }
 }
 
-/// Remove a chave de API salva no Windows Credential Manager.
-/// Deletar credencial inexistente (NoEntry) é tratado como sucesso Ok(()).
 #[tauri::command]
-pub fn delete_api_key() -> Result<(), String> {
-    let entry = Entry::new(SERVICE_NAME, USER_KEY_NAME)
-        .map_err(|e| format!("Erro ao inicializar entrada no cofre: {}", e))?;
-    match entry.delete_password() {
-        Ok(()) => Ok(()),
-        Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(format!("Erro ao remover chave do cofre seguro: {}", e)),
+fn delete_api_key() -> Result<(), String> {
+    match entry()?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(format!("Erro ao remover a chave: {e}")),
     }
 }
 
-/// Faz uma chamada mínima ao Gemini para validar se a chave funciona e tem cota
-/// Header: x-goog-api-key: <chave> (sem parâmetros na URL)
-#[tauri::command]
-pub async fn test_api_key() -> Result<String, String> {
-    let key = get_saved_key()?;
-    let client = get_http_client();
+/// Aceita só nomes de modelo simples (evita montar URLs arbitrárias).
+fn check_model(model: &str) -> Result<(), String> {
+    let ok = !model.is_empty() && model.len() <= 64 && model.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.');
+    if ok { Ok(()) } else { Err(format!("Nome de modelo inválido: {model}")) }
+}
 
-    let payload = json!({
-        "contents": [{
-            "parts": [{ "text": "Responda apenas com a palavra 'OK'" }]
-        }],
-        "generationConfig": {
-            "maxOutputTokens": 10
-        }
-    });
-
-    let resp = client
-        .post(GEMINI_API_ENDPOINT)
-        .header("Content-Type", "application/json")
-        .header("User-Agent", "aistudio-build-desktop")
-        .header("x-goog-api-key", &key)
-        .json(&payload)
+async fn gemini(model: &str, body: Value) -> Result<Value, String> {
+    check_model(model)?;
+    let key = saved_key()?;
+    let resp = HTTP
+        .post(format!("{API_BASE}/{model}:generateContent"))
+        .header("x-goog-api-key", key)
+        .json(&body)
         .send()
         .await
-        .map_err(|e| format!("Erro de conexão de rede ao testar chave: {}", e))?;
-
+        .map_err(|e| format!("Falha de conexão com a API Gemini: {e}"))?;
     let status = resp.status();
-    if status.is_success() {
-        Ok("Conexão validada com sucesso! A chave Gemini está pronta para uso.".to_string())
-    } else {
-        let err_body = resp.text().await.unwrap_or_default();
-        eprintln!("[Gemini] Status {}: {}", status, err_body);
-        if status.as_u16() == 400 || status.as_u16() == 403 {
-            Err(format!("Chave de API inválida ou sem permissão (Status {}). Verifique se a chave do Google AI Studio está correta.", status))
-        } else if status.as_u16() == 429 {
-            Err("Cota de requisições excedida na API Gemini (Status 429). Aguarde alguns instantes.".to_string())
+    if !status.is_success() {
+        let text = resp.text().await.unwrap_or_default();
+        return Err(match status.as_u16() {
+            400 | 401 | 403 => format!("Chave recusada ou requisição inválida (HTTP {status}): {text}"),
+            404 => format!("Modelo {model} não encontrado (HTTP 404)."),
+            429 => "Cota da API Gemini esgotada (HTTP 429). Aguarde e tente de novo.".into(),
+            _ => format!("Erro da API Gemini (HTTP {status}): {text}"),
+        });
+    }
+    resp.json().await.map_err(|e| format!("Resposta inválida da API Gemini: {e}"))
+}
+
+fn first_part(resp: &Value) -> Option<&Value> {
+    resp["candidates"][0]["content"]["parts"].as_array()?.first()
+}
+
+#[tauri::command]
+async fn test_api_key() -> Result<String, String> {
+    gemini(TEST_MODEL, json!({ "contents": [{ "parts": [{ "text": "Responda apenas OK" }] }] })).await?;
+    Ok(format!("Chave válida. Conexão com {TEST_MODEL} funcionando."))
+}
+
+/// Gera JSON estruturado: a interface manda prompt e schema, e valida a resposta.
+#[tauri::command]
+async fn gemini_generate_json(model: String, prompt: String, schema: Value) -> Result<Value, String> {
+    let resp = gemini(
+        &model,
+        json!({
+            "contents": [{ "parts": [{ "text": prompt }] }],
+            "generationConfig": { "responseMimeType": "application/json", "responseSchema": schema }
+        }),
+    )
+    .await?;
+    let text = first_part(&resp).and_then(|p| p["text"].as_str()).ok_or("A IA retornou uma resposta vazia.")?;
+    serde_json::from_str(text.trim()).map_err(|e| format!("A IA não retornou JSON válido: {e}"))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GeneratedImage {
+    base64: String,
+    mime_type: String,
+}
+
+#[tauri::command]
+async fn gemini_generate_image(model: String, prompt: String) -> Result<GeneratedImage, String> {
+    let resp = gemini(
+        &model,
+        json!({
+            "contents": [{ "parts": [{ "text": prompt }] }],
+            "generationConfig": { "responseModalities": ["IMAGE"] }
+        }),
+    )
+    .await?;
+    let parts = resp["candidates"][0]["content"]["parts"].as_array().cloned().unwrap_or_default();
+    let inline = parts
+        .iter()
+        .find_map(|p| p.get("inlineData").filter(|d| d["data"].is_string()))
+        .ok_or("A IA não retornou imagem.")?;
+    Ok(GeneratedImage {
+        base64: inline["data"].as_str().unwrap_or_default().to_string(),
+        mime_type: inline["mimeType"].as_str().unwrap_or("image/png").to_string(),
+    })
+}
+
+#[derive(Deserialize)]
+struct ProjectFile {
+    path: String,
+    content: String,
+    base64: bool,
+}
+
+/// Caminho relativo seguro: sem raiz, sem "..", sem prefixo de drive.
+fn safe_relative(path: &str) -> Result<PathBuf, String> {
+    let p = Path::new(path);
+    let bad_chars = path.contains(':') || path.contains('\\');
+    if path.is_empty() || bad_chars || p.components().any(|c| !matches!(c, Component::Normal(_))) {
+        return Err(format!("Caminho inválido no projeto: {path}"));
+    }
+    Ok(p.to_path_buf())
+}
+
+/// Pede uma pasta ao usuário e grava o projeto em <pasta>/<folder_name>.
+/// Retorna o caminho gravado, ou None se o usuário cancelar.
+#[tauri::command]
+async fn save_project(app: tauri::AppHandle, folder_name: String, files: Vec<ProjectFile>) -> Result<Option<String>, String> {
+    let name = safe_relative(&folder_name)?;
+    if name.components().count() != 1 {
+        return Err("Nome de pasta inválido.".into());
+    }
+    let Some(picked) = app.dialog().file().set_title("Onde salvar o projeto?").blocking_pick_folder() else {
+        return Ok(None);
+    };
+    let base = picked.into_path().map_err(|e| format!("Pasta inválida: {e}"))?;
+    let target = base.join(&name);
+    if target.exists() && target.read_dir().map(|mut d| d.next().is_some()).unwrap_or(true) {
+        return Err(format!("A pasta {} já existe e não está vazia.", target.display()));
+    }
+    for file in files {
+        let full = target.join(safe_relative(&file.path)?);
+        if let Some(parent) = full.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("Erro ao criar {}: {e}", parent.display()))?;
+        }
+        let bytes = if file.base64 {
+            BASE64.decode(file.content.as_bytes()).map_err(|e| format!("Arquivo {} corrompido: {e}", file.path))?
         } else {
-            Err(format!("Erro retornado pela API Gemini (Status {}): {}", status, err_body))
-        }
+            file.content.into_bytes()
+        };
+        std::fs::write(&full, bytes).map_err(|e| format!("Erro ao gravar {}: {e}", full.display()))?;
     }
+    Ok(Some(target.display().to_string()))
 }
 
-/// Gera produtos estruturados para o template de E-commerce
-/// Header: x-goog-api-key: <chave> (sem query param)
-/// generationConfig: responseMimeType e responseSchema estruturado espelhado de server.ts
-#[tauri::command]
-pub async fn generate_store_products(theme: String) -> Result<Value, String> {
-    let key = get_saved_key()?;
-    let client = get_http_client();
-
-    let prompt = format!(
-        "Gere uma lista de 4 produtos comerciais originais e realistas para uma loja online sobre '{}'. \
-        Retorne preços realistas em BRL, descrições persuasivas e estoques coerentes.",
-        theme
-    );
-
-    let payload = json!({
-        "contents": [{
-            "parts": [{ "text": prompt }]
-        }],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema": {
-                "type": "ARRAY",
-                "items": {
-                    "type": "OBJECT",
-                    "properties": {
-                        "name":        { "type": "STRING" },
-                        "price":       { "type": "NUMBER" },
-                        "description": { "type": "STRING" },
-                        "category":    { "type": "STRING" },
-                        "stock":       { "type": "INTEGER" }
-                    },
-                    "required": ["name", "price", "description", "category", "stock"]
-                }
-            }
-        }
-    });
-
-    let resp = client
-        .post(GEMINI_API_ENDPOINT)
-        .header("Content-Type", "application/json")
-        .header("User-Agent", "aistudio-build-desktop")
-        .header("x-goog-api-key", &key)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|e| format!("Falha de conexão com a API Gemini: {}", e))?;
-
-    let status = resp.status();
-    if !status.is_success() {
-        let err_text = resp.text().await.unwrap_or_default();
-        eprintln!("[Gemini] Status {}: {}", status, err_text);
-        if status.as_u16() == 429 {
-            return Err("Cota de requisições excedida na API Gemini (Status 429). Tente novamente mais tarde.".to_string());
-        }
-        if status.as_u16() == 400 || status.as_u16() == 403 {
-            return Err(format!("Chave Gemini recusada pela API (Status {}). Verifique as permissões da chave.", status));
-        }
-        return Err(format!("Erro da API Gemini (Status {}): {}", status, err_text));
-    }
-
-    let json_resp: Value = resp
-        .json()
-        .await
-        .map_err(|e| format!("Erro ao parsear resposta da API Gemini: {}", e))?;
-
-    let raw_text = json_resp["candidates"][0]["content"]["parts"][0]["text"]
-        .as_str()
-        .unwrap_or("[]");
-
-    let clean_json = raw_text.trim().trim_start_matches("```json").trim_start_matches("```").trim_end_matches("```").trim();
-    let parsed: Value = serde_json::from_str(clean_json)
-        .map_err(|e| format!("Falha ao parsear produtos em JSON: {} (Texto bruto: {})", e, clean_json))?;
-
-    Ok(parsed)
-}
-
-/// Gera notícias/posts estruturados para o template de Blog
-/// Header: x-goog-api-key: <chave>
-/// generationConfig: responseMimeType e responseSchema estruturado para artigos do blog
-#[tauri::command]
-pub async fn generate_blog_news(topic: String) -> Result<Value, String> {
-    let key = get_saved_key()?;
-    let client = get_http_client();
-
-    let prompt = format!(
-        "Gere 3 artigos ou notícias completas e estruturadas para um blog moderno sobre '{}'.",
-        topic
-    );
-
-    let payload = json!({
-        "contents": [{
-            "parts": [{ "text": prompt }]
-        }],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema": {
-                "type": "ARRAY",
-                "items": {
-                    "type": "OBJECT",
-                    "properties": {
-                        "title":   { "type": "STRING" },
-                        "slug":    { "type": "STRING" },
-                        "summary": { "type": "STRING" },
-                        "content": { "type": "STRING" },
-                        "author":  { "type": "STRING" }
-                    },
-                    "required": ["title", "slug", "summary", "content", "author"]
-                }
-            }
-        }
-    });
-
-    let resp = client
-        .post(GEMINI_API_ENDPOINT)
-        .header("Content-Type", "application/json")
-        .header("User-Agent", "aistudio-build-desktop")
-        .header("x-goog-api-key", &key)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|e| format!("Falha de conexão com Gemini: {}", e))?;
-
-    let status = resp.status();
-    if !status.is_success() {
-        let err_text = resp.text().await.unwrap_or_default();
-        eprintln!("[Gemini] Status {}: {}", status, err_text);
-        if status.as_u16() == 429 {
-            return Err("Cota de requisições excedida na API Gemini (Status 429). Tente novamente mais tarde.".to_string());
-        }
-        if status.as_u16() == 400 || status.as_u16() == 403 {
-            return Err(format!("Chave Gemini recusada pela API (Status {}).", status));
-        }
-        return Err(format!("Erro da API Gemini (Status {}): {}", status, err_text));
-    }
-
-    let json_resp: Value = resp
-        .json()
-        .await
-        .map_err(|e| format!("Erro ao parsear resposta: {}", e))?;
-
-    let raw_text = json_resp["candidates"][0]["content"]["parts"][0]["text"]
-        .as_str()
-        .unwrap_or("[]");
-
-    let clean = raw_text.trim().trim_start_matches("```json").trim_start_matches("```").trim_end_matches("```").trim();
-    let parsed: Value = serde_json::from_str(clean)
-        .map_err(|e| format!("Falha ao parsear blog news em JSON: {} (Texto bruto: {})", e, clean))?;
-
-    Ok(parsed)
-}
-
-/// Gera roteiro inteligente para o template de Viagens
-/// Header: x-goog-api-key: <chave>
-/// generationConfig: responseMimeType e responseSchema estruturado por dias
-#[tauri::command]
-pub async fn generate_travel_plan(destination: String, days: u32) -> Result<Value, String> {
-    if days < 1 || days > 30 {
-        return Err("Número de dias deve estar entre 1 e 30.".to_string());
-    }
-
-    let key = get_saved_key()?;
-    let client = get_http_client();
-
-    let prompt = format!(
-        "Crie um roteiro de viagem detalhado de {} dias para o destino '{}'.",
-        days, destination
-    );
-
-    let payload = json!({
-        "contents": [{
-            "parts": [{ "text": prompt }]
-        }],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "responseSchema": {
-                "type": "ARRAY",
-                "items": {
-                    "type": "OBJECT",
-                    "properties": {
-                        "day":       { "type": "INTEGER" },
-                        "title":     { "type": "STRING" },
-                        "morning":   { "type": "STRING" },
-                        "afternoon": { "type": "STRING" },
-                        "evening":   { "type": "STRING" }
-                    },
-                    "required": ["day", "title", "morning", "afternoon", "evening"]
-                }
-            }
-        }
-    });
-
-    let resp = client
-        .post(GEMINI_API_ENDPOINT)
-        .header("Content-Type", "application/json")
-        .header("User-Agent", "aistudio-build-desktop")
-        .header("x-goog-api-key", &key)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(|e| format!("Falha de conexão com Gemini: {}", e))?;
-
-    let status = resp.status();
-    if !status.is_success() {
-        let err_text = resp.text().await.unwrap_or_default();
-        eprintln!("[Gemini] Status {}: {}", status, err_text);
-        if status.as_u16() == 429 {
-            return Err("Cota de requisições excedida na API Gemini (Status 429). Tente novamente mais tarde.".to_string());
-        }
-        if status.as_u16() == 400 || status.as_u16() == 403 {
-            return Err(format!("Chave Gemini recusada pela API (Status {}).", status));
-        }
-        return Err(format!("Erro da API Gemini (Status {}): {}", status, err_text));
-    }
-
-    let json_resp: Value = resp
-        .json()
-        .await
-        .map_err(|e| format!("Erro ao parsear resposta: {}", e))?;
-
-    let raw_text = json_resp["candidates"][0]["content"]["parts"][0]["text"]
-        .as_str()
-        .unwrap_or("[]");
-
-    let clean = raw_text.trim().trim_start_matches("```json").trim_start_matches("```").trim_end_matches("```").trim();
-    let parsed: Value = serde_json::from_str(clean)
-        .map_err(|e| format!("Falha ao parsear roteiro em JSON: {} (Texto bruto: {})", e, clean))?;
-
-    Ok(parsed)
-}
-
-/// Função de entrada principal da biblioteca Tauri v2
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             save_api_key,
             has_api_key,
             delete_api_key,
             test_api_key,
-            generate_store_products,
-            generate_blog_news,
-            generate_travel_plan
+            gemini_generate_json,
+            gemini_generate_image,
+            save_project
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .expect("erro ao iniciar o Gato Pingado");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejeita_caminhos_perigosos() {
+        for bad in ["", "../x", "a/../../b", "/etc/passwd", "C:\\Windows\\x", "C:/x"] {
+            assert!(safe_relative(bad).is_err(), "{bad}");
+        }
+        assert!(safe_relative("src/app/page.tsx").is_ok());
+    }
+
+    #[test]
+    fn valida_nome_do_modelo() {
+        assert!(check_model("gemini-3.8-flash").is_ok());
+        assert!(check_model("x/../../evil").is_err());
+        assert!(check_model("").is_err());
+    }
 }

@@ -1,7 +1,18 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { paymentTables } from "./paymentTables";
+
+export const productAttributes = v.record(v.string(), v.union(v.string(), v.number()));
+
+export const orderStatus = v.union(
+  v.literal("placed"), // pedido feito, pagamento na entrega
+  v.literal("pending_payment"), // aguardando pagamento no Stripe
+  v.literal("paid"),
+  v.literal("cancelled"),
+);
 
 export default defineSchema({
+  ...paymentTables,
   products: defineTable({
     name: v.string(),
     price: v.number(),
@@ -9,6 +20,8 @@ export default defineSchema({
     category: v.string(),
     stock: v.number(),
     imageUrl: v.string(),
+    // Campos extras definidos em src/lib/site.ts (SITE.productFields), pela chave do campo.
+    attributes: v.optional(productAttributes),
   }),
   reviews: defineTable({
     productId: v.id("products"),
@@ -21,19 +34,25 @@ export default defineSchema({
   sales: defineTable({
     userId: v.id("users"),
     total: v.number(),
-    items: v.array(v.object({
+    status: orderStatus,
+    stripeSessionId: v.optional(v.string()),
+    items: v.array(
+      v.object({
         productId: v.id("products"),
         name: v.string(),
         price: v.number(),
         quantity: v.number(),
-    })),
+      }),
+    ),
     shippingAddress: v.object({
-        fullName: v.string(),
-        address: v.string(),
-        city: v.string(),
-        postalCode: v.string(),
+      fullName: v.string(),
+      address: v.string(),
+      city: v.string(),
+      postalCode: v.string(),
     }),
-  }),
+  })
+    .index("by_user", ["userId"])
+    .index("by_stripe_session", ["stripeSessionId"]),
   users: defineTable({
     name: v.string(),
     clerkId: v.string(),
@@ -44,7 +63,7 @@ export default defineSchema({
       v.object({
         productId: v.id("products"),
         quantity: v.number(),
-      })
+      }),
     ),
   }).index("by_userId", ["userId"]),
 });

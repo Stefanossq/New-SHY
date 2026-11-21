@@ -1,7 +1,9 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { paymentTables } from "./paymentTables";
 
 export default defineSchema({
+  ...paymentTables,
   posts: defineTable({
     title: v.string(),
     content_markdown: v.string(), // Conteúdo do post
@@ -49,7 +51,7 @@ export default defineSchema({
 
   audit_logs: defineTable({
     action: v.string(),           // Ex: "AI_GENERATION_RUN"
-    model: v.string(),            // Ex: "gemini-2.5-flash"
+    model: v.string(),            // Ex: "gemini-3.8-flash"
     input_prompt: v.string(),     // O prompt enviado
     output_summary: v.string(),   // Resumo do resultado
     status: v.union(v.literal("SUCCESS"), v.literal("FAILURE")),

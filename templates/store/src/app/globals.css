@@ -2,7 +2,7 @@
 :root {
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   
-  /* MONOCHROME PALETTE - BLACK & WHITE */
+  /* Paleta base escura. A cor de destaque (--accent) vem de src/lib/site.ts */
   --bg-main: #000000;
   --bg-card: #111111;
   --bg-input: #1a1a1a;

@@ -1,32 +1,31 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { GoogleGenAI } from "@google/genai";
+import { geminiKey, geminiModel } from "./aiConfig";
+import { SITE } from "../src/lib/site";
 
+/** Chatbot do blog. Exige login para não expor a cota da chave Gemini a visitantes anônimos. */
 export const chat = action({
   args: { message: v.string() },
   handler: async (ctx, { message }) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return "Erro de Configuração: API Key ausente.";
+    if (!(await ctx.auth.getUserIdentity())) return "Faça login para conversar com o assistente.";
+    const text = message.trim().slice(0, 1000);
+    if (!text) return "Escreva uma mensagem.";
 
-    const ai = new GoogleGenAI({ apiKey });
-    
     try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            // Prompt atualizado para uma persona mais natural e útil
-            contents: `Atue como um assistente virtual útil e amigável para o blog 'Terminal Blog'.
-            Sua função é ajudar os visitantes com dúvidas sobre animes, tecnologia e o conteúdo do site.
-            
-            Diretrizes:
-            1. Responda de forma natural, como uma pessoa normal (sem exagerar em gírias ou roleplay).
-            2. Seja claro, objetivo e educado.
-            3. O idioma é Português do Brasil (PT-BR).
-            
-            Mensagem do usuário: "${message}"`
-        });
-        return response.text;
-    } catch (e) {
-        return "Desculpe, não consegui processar sua mensagem no momento.";
+      const ai = new GoogleGenAI({ apiKey: geminiKey() });
+      const response = await ai.models.generateContent({
+        model: geminiModel(),
+        config: {
+          systemInstruction: `Você é o assistente virtual do blog "${SITE.name}" (${SITE.tagline}).
+Ajude os visitantes com dúvidas sobre animes, games e o conteúdo do site.
+Responda em português do Brasil, de forma natural, clara e educada.`,
+        },
+        contents: text,
+      });
+      return response.text ?? "Não consegui gerar uma resposta.";
+    } catch {
+      return "Desculpe, não consegui processar sua mensagem no momento.";
     }
-  }
+  },
 });

@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 import { useCart } from '@/context/CartContext';
-import { Product } from '@/types';
+import { Product, formatBRL } from '@/types';
 import styles from './ProductCard.module.css';
 import Link from 'next/link';
 import { Eye } from 'lucide-react';
@@ -13,7 +13,7 @@ export default function ProductCard({ product }: { product: Product }) {
     <div className={styles.card}>
       <Link href={`/product/${product._id}`} className={styles.imageLink}>
         <div className={styles.imageContainer}>
-          <img src={product.imageUrl} alt={product.name} className={styles.image} />
+          <img src={product.imageUrl || "/images/placeholder.svg"} alt={product.name} className={styles.image} />
           <div className={styles.overlay}>
             <span className={styles.viewText}><Eye size={16} /> Ver Detalhes</span>
           </div>
@@ -24,7 +24,7 @@ export default function ProductCard({ product }: { product: Product }) {
         <Link href={`/product/${product._id}`}>
             <h3 className={styles.title}>{product.name}</h3>
         </Link>
-        <p className={styles.price}>R$ {product.price.toFixed(2).replace('.', ',')}</p>
+        <p className={styles.price}>{formatBRL(product.price)}</p>
         <button 
           className={styles.button}
           onClick={() => addToCart(product._id)}
