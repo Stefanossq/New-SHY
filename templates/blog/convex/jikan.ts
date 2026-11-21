@@ -2,6 +2,8 @@ import { action, query } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { GoogleGenAI, Type } from "@google/genai";
+import { geminiKey, geminiModel } from "./aiConfig";
+import { requireAdmin, isAdmin } from "./authz";
 
 // --- Actions (Orquestração) ---
 
@@ -11,8 +13,10 @@ import { GoogleGenAI, Type } from "@google/genai";
 export const matchVibe = action({
   args: { vibe: v.string() },
   handler: async (ctx, { vibe }) => {
-    if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing.");
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    // Recursos de IA consomem a cota da sua chave: só para usuários logados.
+    if (!(await ctx.auth.getUserIdentity())) return { keyword: "Faça login para usar o Vibe Matcher", animes: [] };
+    vibe = vibe.slice(0, 120);
+    const ai = new GoogleGenAI({ apiKey: geminiKey() });
 
     // 1. Gemini traduz Vibe -> Keywords
     const prompt = `
@@ -23,7 +27,7 @@ export const matchVibe = action({
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: geminiModel(),
             contents: prompt,
             config: { responseMimeType: "application/json" }
         });
@@ -79,8 +83,7 @@ export const getAiringSchedule = action({
 export const generatePromoVideo = action({
     args: {},
     handler: async (ctx) => {
-        const identity = await ctx.auth.getUserIdentity();
-        if (!identity) throw new Error("Auth required");
+        const identity = await requireAdmin(ctx);
 
         try {
             // Endpoint específico da Jikan v4 para Promos
@@ -140,11 +143,9 @@ export const generatePromoVideo = action({
 export const generateContent = action({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("ACESSO NEGADO: Usuário não autenticado.");
+    const identity = await requireAdmin(ctx);
 
-    if (!process.env.GEMINI_API_KEY) throw new Error("FATAL: GEMINI_API_KEY missing.");
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const ai = new GoogleGenAI({ apiKey: geminiKey() });
 
     let successCount = 0;
 
@@ -188,7 +189,7 @@ export const generateContent = action({
             `;
 
             const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: geminiModel(),
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
@@ -231,7 +232,7 @@ export const generateContent = action({
 
             await ctx.runMutation(internal.mutations.logAudit, {
                 action: "AI_RECOMMENDATION_POST",
-                model: "gemini-2.5-flash",
+                model: geminiModel(),
                 input_prompt: `Recomendar Random + Comments: ${anime.title}`,
                 output_summary: `Gerado: ${data.title}`,
                 status: "SUCCESS",
@@ -257,11 +258,9 @@ export const generateContent = action({
 export const generateGame = action({
     args: {},
     handler: async (ctx) => {
-        const identity = await ctx.auth.getUserIdentity();
-        if (!identity) throw new Error("Auth required");
+        const identity = await requireAdmin(ctx);
 
-        if (!process.env.GEMINI_API_KEY) throw new Error("FATAL: GEMINI_API_KEY missing.");
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const ai = new GoogleGenAI({ apiKey: geminiKey() });
 
         let gameData = null;
         let attempts = 0;
@@ -294,7 +293,7 @@ export const generateGame = action({
         `;
 
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: geminiModel(),
             contents: prompt,
         });
 
@@ -311,7 +310,7 @@ export const generateGame = action({
 
         await ctx.runMutation(internal.mutations.logAudit, {
             action: "AI_GAME_GENERATION",
-            model: "gemini-2.5-flash",
+            model: geminiModel(),
             input_prompt: `Game: ${gameData.title}`,
             output_summary: "Game gerado com sucesso",
             status: "SUCCESS",
@@ -380,6 +379,7 @@ export const getPostBySlug = query({
 
 export const getAuditLogs = query({
     handler: async (ctx) => {
+        if (!(await isAdmin(ctx))) return [];
         return await ctx.db.query("audit_logs").order("desc").take(10);
     }
 });

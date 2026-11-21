@@ -23,13 +23,17 @@ export const add = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Login necessário para avaliar.");
+    if (!Number.isInteger(args.rating) || args.rating < 1 || args.rating > 5) throw new Error("Nota deve ser de 1 a 5.");
+    const comment = args.comment.trim().slice(0, 1000);
+    if (!comment) throw new Error("Escreva um comentário.");
+    if (!(await ctx.db.get(args.productId))) throw new Error("Produto não encontrado.");
 
     await ctx.db.insert("reviews", {
       productId: args.productId,
       userId: identity.subject,
       userName: identity.name || "Usuário",
       rating: args.rating,
-      comment: args.comment,
+      comment,
       createdAt: Date.now(),
     });
   },

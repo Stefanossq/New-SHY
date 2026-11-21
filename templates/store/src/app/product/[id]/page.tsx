@@ -53,7 +53,7 @@ export default function ProductDetailsPage() {
             
             <div className={styles.productGrid}>
                 <div className={styles.imageWrapper}>
-                    <img src={product.imageUrl} alt={product.name} />
+                    <img src={product.imageUrl || "/images/placeholder.svg"} alt={product.name} />
                 </div>
                 <div className={styles.details}>
                     <div className={styles.category}>{product.category}</div>

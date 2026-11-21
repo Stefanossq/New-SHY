@@ -1,7 +1,9 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { paymentTables } from "./paymentTables";
 
 export default defineSchema({
+  ...paymentTables,
   trips: defineTable({
     userId: v.string(),
     destination: v.string(),

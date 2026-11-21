@@ -16,7 +16,7 @@ export default function CartPage() {
             <div className={styles.list}>
                 {cart.map(item => (
                     <div key={item._id} className={styles.item}>
-                        <img src={item.imageUrl} alt={item.name} className={styles.img} />
+                        <img src={item.imageUrl || "/images/placeholder.svg"} alt={item.name} className={styles.img} />
                         <div className={styles.details}>
                             <h3>{item.name}</h3>
                             <p>R$ {item.price.toFixed(2)}</p>

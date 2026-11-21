@@ -13,7 +13,7 @@ export default function ProductCard({ product }: { product: Product }) {
     <div className={styles.card}>
       <Link href={`/product/${product._id}`} className={styles.imageLink}>
         <div className={styles.imageContainer}>
-          <img src={product.imageUrl} alt={product.name} className={styles.image} />
+          <img src={product.imageUrl || "/images/placeholder.svg"} alt={product.name} className={styles.image} />
           <div className={styles.overlay}>
             <span className={styles.viewText}><Eye size={16} /> Ver Detalhes</span>
           </div>

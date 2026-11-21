@@ -47,7 +47,7 @@ export default function HomePage() {
       {/* TEAM GENERATOR SECTION */}
       <section className="card" style={{ width: '100%', maxWidth: '800px', marginTop: '20px', border: '1px solid var(--color-accent)' }}>
         <h2 style={{ fontSize: '1.2rem', marginBottom: '15px', color: 'var(--color-accent)' }}>
-            >_ GERADOR DE TIME ALEATÓRIO
+            &gt;_ GERADOR DE TIME ALEATÓRIO
         </h2>
         
         <p style={{ fontSize: '0.9rem', marginBottom: '20px', color: 'var(--text-secondary)' }}>

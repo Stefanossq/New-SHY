@@ -3,10 +3,12 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import ReactMarkdown from "react-markdown";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import MatrixLoader from "@/components/MatrixLoader";
 
-export default function PostView({ params }: { params: { slug: string } }) {
-  const post = useQuery(api.jikan.getPostBySlug, { slug: params.slug });
+export default function PostView() {
+  const { slug } = useParams<{ slug: string }>();
+  const post = useQuery(api.jikan.getPostBySlug, { slug });
   const likePost = useMutation(api.mutations.likePost);
 
   if (post === undefined) return <MatrixLoader />;
@@ -49,7 +51,7 @@ export default function PostView({ params }: { params: { slug: string } }) {
             {post.comments && post.comments.length > 0 && (
                 <div style={{ marginTop: '50px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
                     <h3 style={{ fontSize: '1.2rem', marginBottom: '20px', color: 'var(--color-accent)' }}>
-                        >_ USER_COMMENTS [SIMULATION]
+                        &gt;_ COMENTÁRIOS SIMULADOS POR IA (não são de leitores reais)
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                         {post.comments.map((comment: any, idx: number) => (
