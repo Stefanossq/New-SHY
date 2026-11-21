@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { KeyRound, Layers } from 'lucide-react';
+import { KeyRound } from 'lucide-react';
 import { APPS, type AppId, type FeatureId } from '../shared/catalog';
 import { getAiStatus, type AiStatus } from './lib/ai';
 import { GENERATOR_VERSION, planSteps, runGeneration, type GenerationResult, type Step, type WizardInput } from './lib/generate';
@@ -58,29 +58,28 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-40 border-b border-line bg-ink/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-          <button onClick={restart} className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-400"><Layers className="h-4 w-4 text-black" /></span>
-            <span className="font-bold text-white">New SHY</span>
-            <span className="hidden text-xs text-gray-500 sm:inline">v{GENERATOR_VERSION}</span>
+      <header className="sticky top-0 z-40 bg-gradient-to-b from-[#1a181d] from-60% to-transparent">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+          <button onClick={restart} className="flex items-center gap-3" aria-label="Gato Pingado — recomeçar">
+            <img src="/gato/logo.webp" alt="" className="h-14 w-auto" />
+            <span className="hidden text-base text-muted sm:inline">v{GENERATOR_VERSION}</span>
           </button>
-          <div className="flex items-center gap-3 text-xs">
+          <div className="flex items-center gap-3 text-base">
             {ai && (
-              <span className={`rounded-full px-2.5 py-1 ${ai.available ? 'bg-emerald-950 text-emerald-300' : 'bg-amber-950 text-amber-300'}`}>
+              <span className={`rounded-full border-2 px-3 py-1 ${ai.available ? 'border-ok/50 text-ok' : 'border-warn/50 text-warn'}`}>
                 {ai.available ? `IA ativa · ${ai.textModel}` : 'IA desligada · dados de exemplo'}
               </span>
             )}
             {isDesktop() && (
-              <button onClick={() => setKeyModal(true)} className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-gray-300 hover:border-gray-600">
-                <KeyRound className="h-3.5 w-3.5" /> Chave Gemini
+              <button onClick={() => setKeyModal(true)} className="btn-ghost !px-4 !py-2 !text-lg">
+                <KeyRound className="h-4 w-4" /> Chave Gemini
               </button>
             )}
           </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">
         <Stepper current={STEP_INDEX[screen]} />
         {screen === 'app' && <AppStep selected={input.app} onSelect={selectApp} />}
         {screen === 'purpose' && (
@@ -109,8 +108,8 @@ export default function App() {
         {screen === 'result' && result && <ResultStep app={input.app} features={input.features} result={result} onRestart={restart} />}
       </main>
 
-      <footer className="border-t border-line py-4 text-center text-xs text-gray-500">
-        New SHY · gera projetos Next.js + Convex + Clerk{' '}+ Stripe prontos para rodar
+      <footer className="py-6 text-center text-base text-muted">
+        Gato Pingado · projetos Next.js + Convex + Clerk + Stripe prontos para rodar
       </footer>
 
       {isDesktop() && <ApiKeyModal open={keyModal} onClose={() => setKeyModal(false)} onChanged={refreshAi} />}

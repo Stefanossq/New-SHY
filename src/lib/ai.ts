@@ -8,13 +8,15 @@ import { DEFAULT_IMAGE_MODEL, DEFAULT_TEXT_MODEL } from '../../shared/config';
 import type { GeneratedImage, HealthResponse } from '../../shared/api';
 import {
   BRAND_SCHEMA,
-  PRODUCTS_SCHEMA,
+  CATALOG_SCHEMA,
   brandPrompt,
+  catalogPrompt,
+  generateValidated,
   parseBrand,
-  parseProducts,
+  parseCatalog,
   productImagePrompt,
-  productsPrompt,
   type Brand,
+  type Catalog,
   type GenerationRequest,
   type Product,
 } from '../../shared/content';
@@ -57,16 +59,20 @@ export const getAiStatus = async (): Promise<AiStatus> => {
   }
 };
 
+// No desktop a chamada é feita em Rust; a validação (zod) e as novas tentativas acontecem aqui,
+// com o mesmo código do servidor e da CLI.
 const desktopJson = (prompt: string, schema: Record<string, unknown>) =>
   callDesktop<unknown>('gemini_generate_json', { model: DEFAULT_TEXT_MODEL, prompt, schema });
 
 export const aiBrand = async (req: GenerationRequest): Promise<Brand> =>
-  isDesktop() ? parseBrand(await desktopJson(brandPrompt(req), BRAND_SCHEMA), req) : post<Brand>('/api/generate/brand', { request: req });
-
-export const aiProducts = async (req: GenerationRequest): Promise<Product[]> =>
   isDesktop()
-    ? parseProducts(await desktopJson(productsPrompt(req), PRODUCTS_SCHEMA))
-    : parseProducts(await post<unknown>('/api/generate/products', { request: req }));
+    ? generateValidated({ prompt: brandPrompt(req), call: (p) => desktopJson(p, BRAND_SCHEMA), parse: (raw) => parseBrand(raw, req) })
+    : post<Brand>('/api/generate/brand', { request: req }); // o servidor já validou
+
+export const aiCatalog = async (req: GenerationRequest): Promise<Catalog> =>
+  isDesktop()
+    ? generateValidated({ prompt: catalogPrompt(req), call: (p) => desktopJson(p, CATALOG_SCHEMA), parse: parseCatalog })
+    : post<Catalog>('/api/generate/catalog', { request: req }); // o servidor já validou
 
 export const aiImage = async (product: Product, brand: Brand): Promise<GeneratedImage> =>
   isDesktop()

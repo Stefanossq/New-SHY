@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "New SHY",
+  "productName": "Gato Pingado",
   "version": "1.0.0",
   "identifier": "dev.newshy.app",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "New SHY",
+        "title": "Gato Pingado",
         "width": 1280,
         "height": 840,
         "minWidth": 900,

@@ -3,23 +3,16 @@
  * No navegador o projeto é baixado como .zip; no desktop é gravado direto numa pasta.
  */
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import type { FileMap } from '../../shared/compose';
+import { buildZipBytes } from '../../shared/zip';
 
 export const isDesktop = (): boolean => isTauri();
 
 export const callDesktop = <T>(cmd: string, args?: Record<string, unknown>): Promise<T> => invoke<T>(cmd, args);
 
-export const buildZip = async (files: FileMap, rootFolder: string): Promise<Blob> => {
-  const zip = new JSZip();
-  const folder = zip.folder(rootFolder)!;
-  for (const [path, content] of Object.entries(files)) {
-    if (typeof content === 'string') folder.file(path, content);
-    else folder.file(path, content.base64, { base64: true });
-  }
-  return zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
-};
+export const buildZip = async (files: FileMap, rootFolder: string): Promise<Blob> =>
+  new Blob([await buildZipBytes(files, rootFolder)], { type: 'application/zip' });
 
 export type ExportResult = { kind: 'zip'; name: string } | { kind: 'folder'; path: string } | { kind: 'cancelled' };
 

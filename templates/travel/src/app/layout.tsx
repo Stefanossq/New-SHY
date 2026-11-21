@@ -5,6 +5,7 @@ import { dark } from "@clerk/themes";
 import ConvexClientProvider from "./ConvexClientProvider";
 import Header from "@/components/Header";
 import { SITE } from "@/lib/site";
+import { themeVars } from "@/lib/theme";
 
 export const metadata: Metadata = {
   title: SITE.name,
@@ -19,7 +20,7 @@ export default function RootLayout({
   return (
     <ClerkProvider appearance={{ baseTheme: dark }}>
       <html lang="pt-BR">
-        <body style={{ "--accent": SITE.accentColor } as React.CSSProperties}>
+        <body style={themeVars(SITE.palette)}>
           <ConvexClientProvider>
             <Header />
             <main className="main-wrapper">

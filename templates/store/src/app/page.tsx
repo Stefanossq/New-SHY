@@ -15,10 +15,17 @@ export default function HomePage() {
   return (
     <div className={styles.homePage}>
       <section className={styles.hero}>
-        <h1 className={styles.heroTitle}>{SITE.name}</h1>
-        <p className={styles.heroSubtitle}>{SITE.tagline}</p>
-        <a href="#collection" className="btn">Ver produtos</a>
+        <h1 className={styles.heroTitle}>{SITE.copy.heroTitle}</h1>
+        <p className={styles.heroSubtitle}>{SITE.copy.heroSubtitle}</p>
+        <a href="#collection" className="btn">{SITE.copy.ctaLabel}</a>
       </section>
+
+      {SITE.copy.aboutText && (
+        <section className={styles.section} style={{ maxWidth: 720 }}>
+          <h2 className={styles.sectionTitle}>{SITE.copy.aboutTitle}</h2>
+          <p style={{ color: "var(--text-muted)", fontSize: "1.1rem" }}>{SITE.copy.aboutText}</p>
+        </section>
+      )}
 
       <section id="collection" className={styles.section}>
         <h2 className={styles.sectionTitle}>Produtos</h2>

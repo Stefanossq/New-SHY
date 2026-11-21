@@ -1,9 +1,9 @@
 /**
  * Verifica de verdade os projetos que o gerador entrega.
  *
- * Para cada app e cada combinação de recursos: compõe o projeto, instala as
- * dependências, gera os tipos do Convex e roda o TypeScript (tsc --noEmit).
- * Com --build também roda `next build`.
+ * Para cada app e cada combinação de recursos: compõe o projeto, gera o .zip com a mesma
+ * função da interface, descompacta numa pasta limpa, instala as dependências, publica o
+ * backend num Convex local e roda o TypeScript (tsc --noEmit). Com --build também roda `next build`.
  *
  * Uso: npm run verify:templates [-- --app store] [-- --build]
  */
@@ -12,8 +12,10 @@ import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { APP_LIST, AppId, FeatureId } from '../shared/catalog';
 import { compose } from '../shared/compose';
-import { placeholderSvg, sampleBrand, sampleProducts } from '../shared/content';
-import { loadTemplateSource, writeFileMap } from './templateSource';
+import { placeholderSvg } from '../shared/content';
+import { buildZipBytes, readZip } from '../shared/zip';
+import { fixtureBrand, fixtureCatalog } from './fixtures';
+import { loadTemplateSource } from './templateSource';
 
 const args = process.argv.slice(2);
 const onlyApp = args.includes('--app') ? (args[args.indexOf('--app') + 1] as AppId) : undefined;
@@ -34,6 +36,9 @@ const VERIFY_CONVEX_ENV: Record<string, string> = {
   CLERK_JWT_ISSUER_DOMAIN: 'https://example.clerk.accounts.dev',
 };
 
+/** Arquivos mantidos entre execuções (cache de dependências e deployment Convex local). */
+const KEEP = new Set(['node_modules', '.env.local']);
+
 const source = loadTemplateSource();
 const failures: string[] = [];
 
@@ -44,42 +49,56 @@ for (const app of APP_LIST) {
     const name = `${app.id}${features.length ? '-' + features.join('-') : ''}`;
     const dir = path.join(outRoot, name);
     console.log(`\n=== ${name}`);
-    const request = { app: app.id, businessName: 'Loja Teste', purpose: 'Projeto de verificação automática do gerador.' };
-    const brand = sampleBrand(request);
-    const products = app.generatesProducts ? sampleProducts() : undefined;
-    const files = compose(
-      {
-        app: app.id,
-        features,
-        slug: `verify-${name}`,
-        brand,
-        products,
-        productImages: products?.map((p) => ({ ext: 'svg' as const, content: placeholderSvg(p.name, brand.accentColor) })),
-        contentSource: 'sample',
-        generatorVersion: version,
-      },
-      source,
-    );
-    // Mantém node_modules e o deployment local entre execuções; troca o resto.
-    if (fs.existsSync(dir)) {
-      const keep = new Set(['node_modules', '.env.local']);
-      for (const entry of fs.readdirSync(dir)) if (!keep.has(entry)) fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
-    }
-    writeFileMap(files, dir);
     try {
+      const brand = fixtureBrand(app.id);
+      const catalog = app.generatesProducts ? fixtureCatalog() : undefined;
+      const files = compose(
+        {
+          app: app.id,
+          features,
+          slug: `verify-${name}`,
+          brand,
+          products: catalog?.products,
+          productFields: catalog?.fields,
+          productImages: catalog?.products.map((p) => ({ ext: 'svg' as const, content: placeholderSvg(p.name, brand.palette.accent) })),
+          contentSource: 'sample',
+          generatorVersion: version,
+        },
+        source,
+      );
+
+      // 1. O zip entregue ao cliente, gerado pela mesma função da interface.
+      const zipBytes = await buildZipBytes(files, `verify-${name}`);
+      fs.mkdirSync(outRoot, { recursive: true });
+      const zipPath = path.join(outRoot, `${name}.zip`);
+      fs.writeFileSync(zipPath, zipBytes);
+      console.log(`  zip: ${path.relative(process.cwd(), zipPath)} (${Math.round(zipBytes.length / 1024)} KB)`);
+
+      // 2. Descompacta numa pasta limpa (mantém só o cache de dependências e o Convex local).
+      if (fs.existsSync(dir)) {
+        for (const entry of fs.readdirSync(dir)) if (!KEEP.has(entry)) fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
+      }
+      const { files: unzipped } = await readZip(fs.readFileSync(zipPath));
+      if (unzipped.size !== Object.keys(files).length) throw new Error(`zip com ${unzipped.size} arquivos, esperado ${Object.keys(files).length}`);
+      for (const [rel, bytes] of unzipped) {
+        const full = path.join(dir, rel);
+        fs.mkdirSync(path.dirname(full), { recursive: true });
+        fs.writeFileSync(full, bytes);
+      }
+
+      // 3. Instala, publica no Convex local e compila, como o cliente faria.
       run('npm install --no-audit --no-fund --loglevel=error', dir);
-      // Sobe um backend Convex local anônimo (sem conta), publica as funções de verdade
-      // (valida schema, módulos e tipos do backend) e gera convex/_generated.
       const convexEnv = { CONVEX_AGENT_MODE: 'anonymous' };
       try {
         run('npx convex dev --once --typecheck disable', dir, convexEnv);
       } catch {
         // Na primeira execução isso só configura o deployment local; as variáveis vêm a seguir.
       }
-      for (const [name, value] of Object.entries(VERIFY_CONVEX_ENV)) {
-        run(`npx convex env set ${name} ${value}`, dir, convexEnv);
+      for (const [key, value] of Object.entries(VERIFY_CONVEX_ENV)) {
+        run(`npx convex env set ${key} ${value}`, dir, convexEnv);
       }
       run('npx convex dev --once --typecheck enable', dir, convexEnv);
+      if (app.generatesProducts) run('npx convex run products:seed', dir, convexEnv);
       run('npx tsc --noEmit', dir);
       if (runBuild) {
         run('npx next build', dir, {
@@ -90,7 +109,8 @@ for (const app of APP_LIST) {
         });
       }
       console.log(`  OK ${name}`);
-    } catch {
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : err);
       failures.push(name);
       console.log(`  FALHOU ${name}`);
     }

@@ -11,6 +11,7 @@ import { dark } from "@clerk/themes";
 import { ToasterProvider } from "@/context/ToasterContext";
 import Toaster from "@/components/Toaster";
 import { SITE } from "@/lib/site";
+import { themeVars } from "@/lib/theme";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,7 +24,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <ClerkProvider localization={ptBR} appearance={{ baseTheme: dark }}>
       <html lang="pt-BR">
-        <body className={inter.className} style={{ "--accent": SITE.accentColor } as React.CSSProperties}>
+        <body className={inter.className} style={themeVars(SITE.palette)}>
           <ConvexClientProvider>
             <ToasterProvider>
               <CartProvider>

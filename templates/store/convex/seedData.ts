@@ -1,4 +1,4 @@
-// Produtos iniciais da loja. O New SHY substitui este arquivo pelo catálogo gerado.
+// Produtos iniciais da loja. O Gato Pingado substitui este arquivo pelo catálogo gerado.
 // São inseridos uma única vez com: npx convex run products:seed
 export const SEED_PRODUCTS = [
   {

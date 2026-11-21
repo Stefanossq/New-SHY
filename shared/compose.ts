@@ -7,7 +7,7 @@
  * de arquivos do projeto. Roda igual no navegador, no app desktop e nos testes.
  */
 import { APPS, AppId, FEATURES, FeatureId, envFor } from './catalog';
-import { Brand, Product } from './content';
+import { Brand, Product, ProductField } from './content';
 
 export type FileContent = string | { base64: string };
 export type FileMap = Record<string, FileContent>;
@@ -24,6 +24,8 @@ export interface ComposeInput {
   slug: string;
   brand: Brand;
   products?: Product[];
+  /** Campos extras dos produtos (só loja). */
+  productFields?: ProductField[];
   productImages?: ProductImage[];
   /** De onde veio o conteúdo: IA de verdade ou dados de exemplo. */
   contentSource: 'ai' | 'sample';
@@ -63,22 +65,30 @@ const featureLayers = (app: AppId, feature: FeatureId): string[] => {
 
 const ts = (value: unknown) => JSON.stringify(value, null, 2);
 
+/** Indenta um JSON multilinha para caber dentro do objeto SITE. */
+const nested = (value: unknown) => ts(value).replace(/\n/g, '\n  ');
+
 export const siteFile = (input: ComposeInput): string =>
-  `// Gerado pelo New SHY. Pode editar à vontade.
-export const SITE = {
+  `// Gerado pelo Gato Pingado. Pode editar à vontade: a paleta muda o site inteiro.
+import type { SiteConfig } from "./siteTypes";
+
+export const SITE: SiteConfig = {
   name: ${JSON.stringify(input.brand.name)},
   tagline: ${JSON.stringify(input.brand.tagline)},
   description: ${JSON.stringify(input.brand.description)},
-  accentColor: ${JSON.stringify(input.brand.accentColor)},
+  accentColor: ${JSON.stringify(input.brand.palette.accent)},
+  palette: ${nested(input.brand.palette)},
+  copy: ${nested(input.brand.copy)},
+  productFields: ${nested(input.productFields ?? [])},
   features: {
     payments: ${input.features.includes('payments')},
   },
-} as const;
+};
 `;
 
 const seedFile = (products: Product[], imageUrls: string[]): string => {
   const rows = products.map((p, i) => ({ ...p, imageUrl: imageUrls[i] ?? '' }));
-  return `// Produtos iniciais da loja. Gerado pelo New SHY.
+  return `// Produtos iniciais da loja. Gerado pelo Gato Pingado.
 // São inseridos uma única vez com: npx convex run products:seed
 export const SEED_PRODUCTS = ${ts(rows)};
 `;
@@ -98,7 +108,7 @@ export const readme = (input: ComposeInput): string => {
     '',
     input.brand.tagline,
     '',
-    `Projeto gerado pelo New SHY: **${app.name}** (${app.stack.join(', ')}).`,
+    `Projeto gerado pelo Gato Pingado: **${app.name}** (${app.stack.join(', ')}).`,
     '',
     '## Recursos incluídos',
     '',
@@ -187,7 +197,7 @@ export const compose = (input: ComposeInput, source: FileMap): FileMap => {
   files['.env.local.example'] = envExample(input.app, features);
   files['README.md'] = readme(normalized);
   files['shy.json'] =
-    ts({ generator: `new-shy@${input.generatorVersion}`, app: input.app, features, contentSource: input.contentSource }) + '\n';
+    ts({ generator: `gato-pingado@${input.generatorVersion}`, app: input.app, features, contentSource: input.contentSource }) + '\n';
 
   if (app.generatesProducts) {
     const products = input.products ?? [];

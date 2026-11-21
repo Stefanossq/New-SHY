@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { APP_LIST, envFor } from '../shared/catalog';
 import { compose, slugify, type ComposeInput } from '../shared/compose';
-import { placeholderSvg, sampleBrand, sampleProducts } from '../shared/content';
+import { placeholderSvg, sampleBrand, sampleCatalog } from '../shared/content';
+import { buildZipBytes, readZip } from '../shared/zip';
+import { fixtureBrand, fixtureCatalog } from '../scripts/fixtures';
 import { loadTemplateSource } from '../scripts/templateSource';
 import { TEMPLATE_SOURCE } from '../src/lib/templates';
 
@@ -9,14 +11,14 @@ const source = loadTemplateSource();
 
 const inputFor = (app: ComposeInput['app'], features: ComposeInput['features']): ComposeInput => {
   const brand = sampleBrand({ app, businessName: 'Café do Sul', purpose: 'Loja de cafés especiais do Rio Grande do Sul.' });
-  const products = sampleProducts();
+  const { products } = sampleCatalog();
   return {
     app,
     features,
     slug: 'cafe-do-sul',
     brand,
     products,
-    productImages: products.map((p) => ({ ext: 'svg', content: placeholderSvg(p.name, brand.accentColor) })),
+    productImages: products.map((p) => ({ ext: 'svg', content: placeholderSvg(p.name, brand.palette.accent) })),
     contentSource: 'sample',
     generatorVersion: 'test',
   };
@@ -72,6 +74,52 @@ describe('loja', () => {
       expect(files).toHaveProperty([`public/images/product-${i}.svg`]);
       expect(seed).toContain(`/images/product-${i}.svg`);
     }
+  });
+});
+
+describe('personalização da IA', () => {
+  const brand = fixtureBrand('store', 'Café do Sul');
+  const catalog = fixtureCatalog();
+  const files = compose(
+    { ...inputFor('store', []), brand, products: catalog.products, productFields: catalog.fields },
+    source,
+  );
+  const site = files['src/lib/site.ts'] as string;
+
+  it('grava paleta, textos e campos em src/lib/site.ts', () => {
+    expect(site).toContain('import type { SiteConfig } from "./siteTypes";');
+    expect(site).toContain('"accent": "#e58e26"');
+    expect(site).toContain('"heroTitle": "Café do Sul: verificação"');
+    expect(site).toContain('"key": "pesoGramas"');
+    expect(site).toContain('"unit": "g"');
+  });
+
+  it('grava os valores dos campos no catálogo inicial', () => {
+    const seed = files['convex/seedData.ts'] as string;
+    expect(seed).toContain('"torra": "Média"');
+    expect(seed).toContain('"pesoGramas": 250');
+  });
+
+  it('os templates usam a paleta e os textos (nada fixo no lugar)', () => {
+    for (const app of APP_LIST) {
+      const f = compose({ ...inputFor(app.id, []), brand: fixtureBrand(app.id) }, source);
+      expect(f['src/app/layout.tsx'] as string, app.id).toContain('themeVars(SITE.palette)');
+      expect(f['src/app/page.tsx'] as string, app.id).toContain('SITE.copy.heroTitle');
+      expect(f).toHaveProperty(['src/lib/theme.ts']);
+      expect(f).toHaveProperty(['src/lib/siteTypes.ts']);
+    }
+  });
+});
+
+describe('zip entregue', () => {
+  it('contém exatamente os arquivos do projeto, dentro de uma pasta', async () => {
+    const files = compose(inputFor('store', ['payments']), source);
+    const { root, files: unzipped } = await readZip(await buildZipBytes(files, 'cafe-do-sul'));
+    expect(root).toBe('cafe-do-sul');
+    expect([...unzipped.keys()].sort()).toEqual(Object.keys(files).sort());
+    expect(new TextDecoder().decode(unzipped.get('package.json'))).toBe(files['package.json']);
+    const favicon = files['src/app/favicon.ico'] as { base64: string };
+    expect(Buffer.from(unzipped.get('src/app/favicon.ico')!).toString('base64')).toBe(favicon.base64);
   });
 });
 

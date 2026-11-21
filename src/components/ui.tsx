@@ -5,25 +5,39 @@ export const Button = ({
   className = '',
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' }) => (
-  <button
-    {...props}
-    className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-      variant === 'primary'
-        ? 'bg-cyan-400 text-black hover:bg-cyan-300'
-        : 'border border-line bg-panel text-gray-200 hover:border-gray-600'
-    } ${className}`}
-  />
+  <button {...props} className={`${variant === 'primary' ? 'btn-cream' : 'btn-ghost'} ${className}`} />
 );
 
 export const Card = ({ children, className = '' }: { children: ReactNode; className?: string }) => (
-  <div className={`rounded-xl border border-line bg-panel p-6 ${className}`}>{children}</div>
+  <div className={`gp-panel p-6 ${className}`}>{children}</div>
 );
 
 export const Notice = ({ tone = 'info', children }: { tone?: 'info' | 'warning' | 'error'; children: ReactNode }) => {
   const styles = {
-    info: 'border-cyan-900 bg-cyan-950/40 text-cyan-100',
-    warning: 'border-amber-800 bg-amber-950/40 text-amber-100',
-    error: 'border-red-800 bg-red-950/40 text-red-100',
+    info: 'border-lav/60 bg-lav/10 text-cream',
+    warning: 'border-warn/60 bg-warn/10 text-cream',
+    error: 'border-bad/60 bg-bad/10 text-cream',
   }[tone];
-  return <div className={`rounded-lg border px-4 py-3 text-sm ${styles}`}>{children}</div>;
+  return <div className={`rounded-2xl border-2 px-4 py-3 text-lg leading-snug ${styles}`}>{children}</div>;
 };
+
+/** Título de tela com a pata, como nas telas do site. */
+export const ScreenTitle = ({ children, sub }: { children: ReactNode; sub?: ReactNode }) => (
+  <div className="flex items-center gap-4">
+    <Paw className="h-12 w-12 shrink-0 -rotate-12 text-cream" />
+    <div>
+      <h1 className="gp-title text-4xl sm:text-5xl">{children}</h1>
+      {sub && <p className="mt-1 text-xl text-cream-2">{sub}</p>}
+    </div>
+  </div>
+);
+
+export const Paw = ({ className = '' }: { className?: string }) => (
+  <svg viewBox="0 0 64 64" className={className} fill="currentColor" aria-hidden="true">
+    <ellipse cx="32" cy="42" rx="14" ry="12" />
+    <ellipse cx="14" cy="26" rx="6" ry="8" transform="rotate(-18 14 26)" />
+    <ellipse cx="26" cy="15" rx="6" ry="8.5" transform="rotate(-6 26 15)" />
+    <ellipse cx="39" cy="15" rx="6" ry="8.5" transform="rotate(6 39 15)" />
+    <ellipse cx="51" cy="26" rx="6" ry="8" transform="rotate(18 51 26)" />
+  </svg>
+);

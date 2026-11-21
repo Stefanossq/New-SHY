@@ -1,6 +1,7 @@
 # Dependências e builds
 node_modules
 dist
+cli/dist
 dist-ssr
 *.tsbuildinfo
 

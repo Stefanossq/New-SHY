@@ -9,11 +9,12 @@ import {
   normalizeRequest,
   placeholderSvg,
   sampleBrand,
-  sampleProducts,
+  sampleCatalog,
   type Brand,
   type Product,
+  type ProductField,
 } from '../../shared/content';
-import { aiBrand, aiImage, aiProducts, type AiStatus } from './ai';
+import { aiBrand, aiCatalog, aiImage, type AiStatus } from './ai';
 import { TEMPLATE_SOURCE } from './templates';
 
 export const GENERATOR_VERSION: string = __APP_VERSION__;
@@ -39,6 +40,7 @@ export interface GenerationResult {
   slug: string;
   brand: Brand;
   products: Product[];
+  fields: ProductField[];
   images: { url: string; isPlaceholder: boolean }[];
   contentSource: 'ai' | 'sample';
   warnings: string[];
@@ -49,9 +51,9 @@ const errorText = (err: unknown) => (err instanceof Error ? err.message : String
 export const planSteps = (input: WizardInput, ai: AiStatus): Step[] => {
   const app = APPS[input.app];
   const useAI = input.useAI && ai.available;
-  const steps: Step[] = [{ id: 'brand', label: useAI ? 'Criando nome, slogan e cor com IA' : 'Preparando identidade (dados de exemplo)', status: 'pending' }];
+  const steps: Step[] = [{ id: 'brand', label: useAI ? 'Criando nome, paleta e textos com IA' : 'Preparando identidade (dados de exemplo)', status: 'pending' }];
   if (app.generatesProducts) {
-    steps.push({ id: 'products', label: useAI ? 'Gerando catálogo de produtos com IA' : 'Preparando produtos de exemplo', status: 'pending' });
+    steps.push({ id: 'products', label: useAI ? 'Gerando catálogo e campos dos produtos com IA' : 'Preparando produtos de exemplo', status: 'pending' });
     steps.push({ id: 'images', label: useAI && ai.images ? 'Gerando fotos dos produtos com IA' : 'Criando imagens provisórias', status: 'pending' });
   }
   steps.push({ id: 'compose', label: 'Montando o projeto (templates + recursos escolhidos)', status: 'pending' });
@@ -87,15 +89,17 @@ export const runGeneration = async (
 
   // 2. Produtos e imagens (só loja)
   let products: Product[] = [];
+  let fields: ProductField[] = [];
   const images: ProductImage[] = [];
   const previews: GenerationResult['images'] = [];
   if (app.generatesProducts) {
     onStep('products', { status: 'running' });
-    products = sampleProducts();
+    ({ products, fields } = sampleCatalog());
     if (useAI) {
       try {
-        products = await aiProducts(request);
-        onStep('products', { status: 'done', detail: `${products.length} produtos` });
+        ({ products, fields } = await aiCatalog(request));
+        const extra = fields.length ? ` · campos: ${fields.map((f) => f.label).join(', ')}` : '';
+        onStep('products', { status: 'done', detail: `${products.length} produtos${extra}` });
       } catch (err) {
         usedSample = true;
         warnings.push(`Produtos: a IA falhou (${errorText(err)}); usei produtos de exemplo.`);
@@ -120,7 +124,7 @@ export const runGeneration = async (
           if (failed === 1) warnings.push(`Imagens: a IA falhou (${errorText(err)}); usei imagens provisórias.`);
         }
       }
-      const svg = placeholderSvg(product.name, brand.accentColor);
+      const svg = placeholderSvg(product.name, brand.palette.accent, brand.palette.surface);
       images.push({ ext: 'svg', content: svg });
       previews.push({ url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, isPlaceholder: true });
     }
@@ -141,6 +145,7 @@ export const runGeneration = async (
       slug,
       brand,
       products: app.generatesProducts ? products : undefined,
+      productFields: app.generatesProducts ? fields : undefined,
       productImages: app.generatesProducts ? images : undefined,
       contentSource: usedSample ? 'sample' : 'ai',
       generatorVersion: GENERATOR_VERSION,
@@ -149,5 +154,5 @@ export const runGeneration = async (
   );
   onStep('compose', { status: 'done', detail: `${Object.keys(files).length} arquivos` });
 
-  return { files, slug, brand, products, images: previews, contentSource: usedSample ? 'sample' : 'ai', warnings };
+  return { files, slug, brand, products, fields, images: previews, contentSource: usedSample ? 'sample' : 'ai', warnings };
 };

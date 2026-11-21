@@ -2,6 +2,8 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { paymentTables } from "./paymentTables";
 
+export const productAttributes = v.record(v.string(), v.union(v.string(), v.number()));
+
 export const orderStatus = v.union(
   v.literal("placed"), // pedido feito, pagamento na entrega
   v.literal("pending_payment"), // aguardando pagamento no Stripe
@@ -18,6 +20,8 @@ export default defineSchema({
     category: v.string(),
     stock: v.number(),
     imageUrl: v.string(),
+    // Campos extras definidos em src/lib/site.ts (SITE.productFields), pela chave do campo.
+    attributes: v.optional(productAttributes),
   }),
   reviews: defineTable({
     productId: v.id("products"),

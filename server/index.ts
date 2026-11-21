@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { HealthResponse } from '../shared/api';
 import { InputError, normalizeRequest, type Brand, type Product } from '../shared/content';
-import { generateBrand, generateImage, generateProducts, hasKey, imageModel, imagesEnabled, textModel } from './gemini';
+import { generateBrand, generateCatalog, generateImage, hasKey, imageModel, imagesEnabled, textModel } from './gemini';
 
 try {
   process.loadEnvFile('.env');
@@ -60,7 +60,7 @@ const handle =
     }
   };
 
-const isBrand = (b: any): b is Brand => b && typeof b.name === 'string' && typeof b.accentColor === 'string';
+const isBrand = (b: any): b is Brand => b && typeof b.name === 'string' && typeof b.palette?.accent === 'string';
 const isProduct = (p: any): p is Product => p && typeof p.name === 'string' && typeof p.category === 'string';
 
 app.get('/api/health', (_req, res) => {
@@ -69,7 +69,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.post('/api/generate/brand', rateLimit, handle((body) => generateBrand(normalizeRequest(body.request))));
-app.post('/api/generate/products', rateLimit, handle((body) => generateProducts(normalizeRequest(body.request))));
+app.post('/api/generate/catalog', rateLimit, handle((body) => generateCatalog(normalizeRequest(body.request))));
 app.post(
   '/api/generate/image',
   rateLimit,

@@ -33,9 +33,9 @@ const Node = ({ node, depth, open, toggle, selected, select }: {
       <button
         onClick={() => select(node.path)}
         style={pad}
-        className={`flex w-full items-center gap-1.5 py-1 pr-2 text-left text-xs ${selected === node.path ? 'bg-cyan-950/60 text-cyan-200' : 'text-gray-300 hover:bg-gray-800'}`}
+        className={`flex w-full items-center gap-1.5 py-1 pr-2 text-left text-xs ${selected === node.path ? 'bg-lav/20 text-lav-soft' : 'text-cream-2 hover:bg-panel-2'}`}
       >
-        <FileText className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+        <FileText className="h-3.5 w-3.5 shrink-0 text-muted" />
         <span className="truncate">{node.name}</span>
       </button>
     );
@@ -43,9 +43,9 @@ const Node = ({ node, depth, open, toggle, selected, select }: {
   const isOpen = open.has(node.path);
   return (
     <div>
-      <button onClick={() => toggle(node.path)} style={pad} className="flex w-full items-center gap-1.5 py-1 pr-2 text-left text-xs text-gray-200 hover:bg-gray-800">
+      <button onClick={() => toggle(node.path)} style={pad} className="flex w-full items-center gap-1.5 py-1 pr-2 text-left text-xs text-cream hover:bg-panel-2">
         {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        <Folder className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
+        <Folder className="h-3.5 w-3.5 shrink-0 text-lav-soft" />
         <span className="truncate">{node.name}</span>
       </button>
       {isOpen && node.children.map((c) => <Node key={c.path} node={c} depth={depth + 1} open={open} toggle={toggle} selected={selected} select={select} />)}
@@ -72,17 +72,17 @@ export default function FileExplorer({ files }: { files: FileMap }) {
   }, [content, selected]);
 
   return (
-    <div className="grid h-[520px] grid-cols-1 overflow-hidden rounded-xl border border-line md:grid-cols-[240px_1fr]">
+    <div className="grid h-[520px] grid-cols-1 overflow-hidden rounded-2xl border-2 border-line md:grid-cols-[240px_1fr]">
       <nav className="overflow-y-auto border-b border-line bg-panel py-2 md:border-b-0 md:border-r" aria-label="Arquivos do projeto">
         {tree.map((n) => <Node key={n.path} node={n} depth={0} open={open} toggle={toggle} selected={selected} select={setSelected} />)}
       </nav>
       <div className="flex min-w-0 flex-col bg-[#0d1117]">
-        <div className="border-b border-line px-4 py-2 font-mono text-xs text-gray-400">{selected}</div>
+        <div className="border-b border-line px-4 py-2 font-mono text-xs text-muted">{selected}</div>
         <div className="flex-1 overflow-auto p-4">
           {html !== null ? (
             <pre className="text-xs leading-relaxed"><code className="hljs" dangerouslySetInnerHTML={{ __html: html }} /></pre>
           ) : (
-            <p className="text-sm text-gray-500">Arquivo binário (imagem).</p>
+            <p className="text-sm text-muted">Arquivo binário (imagem).</p>
           )}
         </div>
       </div>

@@ -9,6 +9,9 @@ import Link from "next/link";
 import styles from './page.module.css';
 import { useUser, SignInButton } from "@clerk/nextjs";
 import { useParams } from "next/navigation";
+import { SITE } from "@/lib/site";
+import { formatAttribute } from "@/lib/theme";
+import { formatBRL } from "@/types";
 
 export default function ProductDetailsPage() {
     // No Next.js 15+, usar params como prop pode causar problemas de tipagem com Promises em Client Components.
@@ -58,8 +61,19 @@ export default function ProductDetailsPage() {
                 <div className={styles.details}>
                     <div className={styles.category}>{product.category}</div>
                     <h1 className={styles.title}>{product.name}</h1>
-                    <div className={styles.price}>R$ {product.price.toFixed(2)}</div>
+                    <div className={styles.price}>{formatBRL(product.price)}</div>
                     <p className={styles.description}>{product.description}</p>
+
+                    {SITE.productFields.length > 0 && (
+                        <dl className={styles.meta} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 16px', marginTop: '16px' }}>
+                            {SITE.productFields.map((field) => (
+                                <div key={field.key} style={{ display: 'contents' }}>
+                                    <dt style={{ color: 'var(--text-muted)' }}>{field.label}</dt>
+                                    <dd>{formatAttribute(field, product.attributes?.[field.key])}</dd>
+                                </div>
+                            ))}
+                        </dl>
+                    )}
                     
                     <button onClick={() => addToCart(productId)} className="btn" style={{ width: '100%', marginTop: '20px', display: 'flex', justifyContent: 'center', gap: '10px' }}>
                         <ShoppingBag size={18} /> Adicionar ao Carrinho
@@ -80,7 +94,7 @@ export default function ProductDetailsPage() {
                         <div key={r._id} className={styles.reviewCard}>
                             <div className={styles.reviewHeader}>
                                 <span className={styles.reviewerName}>{r.userName}</span>
-                                <div className={styles.stars}>{[...Array(5)].map((_, i) => <Star key={i} size={14} fill={i < r.rating ? "#fff" : "none"} stroke="#fff"/>)}</div>
+                                <div className={styles.stars}>{[...Array(5)].map((_, i) => <Star key={i} size={14} fill={i < r.rating ? "currentColor" : "none"} stroke="currentColor"/>)}</div>
                             </div>
                             <p className={styles.reviewComment}>{r.comment}</p>
                             <span className={styles.reviewDate}>{new Date(r.createdAt).toLocaleDateString()}</span>
@@ -95,7 +109,7 @@ export default function ProductDetailsPage() {
                         <div className={styles.ratingInput}>
                             {[1,2,3,4,5].map(star => (
                                 <button type="button" key={star} onClick={() => setRating(star)} className={styles.starBtn}>
-                                    <Star fill={star <= rating ? "#fff" : "none"} stroke="#fff" size={24} />
+                                    <Star fill={star <= rating ? "currentColor" : "none"} stroke="currentColor" size={24} />
                                 </button>
                             ))}
                         </div>

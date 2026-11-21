@@ -6,8 +6,9 @@ import { Id } from '@/convex/_generated/dataModel';
 import { Plus, Trash, Edit } from 'lucide-react';
 import { Product, ORDER_STATUS_LABEL, formatBRL } from '@/types';
 import styles from './page.module.css';
+import { SITE } from '@/lib/site';
 
-const EMPTY = { name: '', price: 0, stock: 0, description: '', category: '', imageUrl: '' };
+const EMPTY = { name: '', price: 0, stock: 0, description: '', category: '', imageUrl: '', attributes: {} as Record<string, string | number> };
 
 export default function AdminPage() {
   const isAdmin = useQuery(api.authz.amIAdmin);
@@ -49,7 +50,7 @@ export default function AdminPage() {
   const handleEdit = (p: Product) => {
     setEditing(p._id);
     setIsNew(false);
-    setFormData({ name: p.name, price: p.price, stock: p.stock, description: p.description, category: p.category, imageUrl: p.imageUrl });
+    setFormData({ name: p.name, price: p.price, stock: p.stock, description: p.description, category: p.category, imageUrl: p.imageUrl, attributes: p.attributes ?? {} });
   };
 
   const handleDelete = async (p: Product) => {
@@ -73,6 +74,20 @@ export default function AdminPage() {
           <input placeholder="Estoque" type="number" min="0" step="1" value={formData.stock} onChange={(e) => setFormData({ ...formData, stock: Number(e.target.value) })} required />
           <input placeholder="Categoria" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} required />
           <input placeholder="URL da imagem" value={formData.imageUrl} onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })} />
+          {SITE.productFields.map((field) => (
+            <input
+              key={field.key}
+              placeholder={field.unit ? `${field.label} (${field.unit})` : field.label}
+              type={field.type === 'number' ? 'number' : 'text'}
+              step="any"
+              value={formData.attributes[field.key] ?? ''}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const value = field.type === 'number' && raw !== '' ? Number(raw) : raw;
+                setFormData({ ...formData, attributes: { ...formData.attributes, [field.key]: value } });
+              }}
+            />
+          ))}
           <textarea placeholder="Descrição" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required />
           {error && <p style={{ color: 'var(--error)' }}>{error}</p>}
           <div style={{ display: 'flex', gap: '10px' }}>

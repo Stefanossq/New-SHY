@@ -52,12 +52,12 @@ export default function ApiKeyModal({ open, onClose, onChanged }: { open: boolea
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-md rounded-xl border border-line bg-panel p-6">
+      <div className="w-full max-w-md gp-panel p-6">
         <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-2 font-semibold text-white"><KeyRound className="h-5 w-5 text-cyan-300" /> Chave da API Gemini</h2>
-          <button onClick={onClose} aria-label="Fechar" className="text-gray-400 hover:text-white"><X className="h-5 w-5" /></button>
+          <h2 className="flex items-center gap-2 font-semibold text-cream"><KeyRound className="h-5 w-5 text-lav-soft" /> Chave da API Gemini</h2>
+          <button onClick={onClose} aria-label="Fechar" className="text-muted hover:text-cream"><X className="h-5 w-5" /></button>
         </div>
-        <p className="mt-2 text-sm text-gray-400">
+        <p className="mt-2 text-sm text-muted">
           Fica salva no Gerenciador de Credenciais do Windows, nunca em arquivo. Crie a sua em aistudio.google.com/apikey.
         </p>
         <div className="mt-4 flex gap-2">
@@ -66,7 +66,7 @@ export default function ApiKeyModal({ open, onClose, onChanged }: { open: boolea
             value={key}
             onChange={(e) => setKey(e.target.value)}
             placeholder={hasKey ? 'Chave já salva — cole outra para trocar' : 'Cole sua chave aqui'}
-            className="flex-1 rounded-lg border border-line bg-ink px-3 py-2 text-sm text-white outline-none focus:border-cyan-400"
+            className="flex-1 rounded-lg border border-line bg-bg px-3 py-2 text-sm text-cream outline-none focus:border-lav-soft"
           />
           <Button variant="ghost" onClick={() => setShow(!show)} aria-label={show ? 'Ocultar' : 'Mostrar'}>
             {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

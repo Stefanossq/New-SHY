@@ -1,4 +1,4 @@
-//! Backend do app desktop do New SHY.
+//! Backend do app desktop do Gato Pingado.
 //!
 //! Só faz o que o navegador não pode fazer com segurança:
 //! - guardar a chave Gemini no Gerenciador de Credenciais do Windows;
@@ -14,6 +14,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 use tauri_plugin_dialog::DialogExt;
 
+// Mantido como "new-shy" para não perder chaves já salvas no Gerenciador de Credenciais.
 const SERVICE_NAME: &str = "new-shy";
 const KEY_NAME: &str = "gemini_api_key";
 /// Mesmo padrão de shared/config.ts (DEFAULT_TEXT_MODEL).
@@ -208,7 +209,7 @@ pub fn run() {
             save_project
         ])
         .run(tauri::generate_context!())
-        .expect("erro ao iniciar o New SHY");
+        .expect("erro ao iniciar o Gato Pingado");
 }
 
 #[cfg(test)]

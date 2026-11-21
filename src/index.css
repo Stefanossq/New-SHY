@@ -1,20 +1,149 @@
 @import 'tailwindcss';
+@import '@fontsource/gochi-hand/400.css';
+@import '@fontsource/patrick-hand/400.css';
 @import 'highlight.js/styles/atom-one-dark.css';
 
+/* Identidade visual do Gato Pingado (mesmos tokens do site da loja). */
 @theme {
-  --color-ink: #0b0f17;
-  --color-panel: #111827;
-  --color-line: #1f2937;
-  --color-brand: #22d3ee;
+  --color-bg: #1c1a1f;
+  --color-panel: #27242b;
+  --color-panel-2: #312d36;
+  --color-frame: #3a3541;
+  --color-line: #4a4552;
+  --color-cream: #f3ece0;
+  --color-cream-2: #e4dacb;
+  --color-ink: #0c0b0e;
+  --color-muted: #a9a2b2;
+  --color-lav: #8b78f0;
+  --color-lav-soft: #b5a9f6;
+  --color-ok: #7fd49a;
+  --color-warn: #f2c94c;
+  --color-bad: #f08a8a;
+
+  --font-hand: 'Gochi Hand', 'Comic Sans MS', cursive;
+  --font-body: 'Patrick Hand', 'Comic Sans MS', system-ui, sans-serif;
 }
 
 html,
 body {
-  background: var(--color-ink);
-  color: #e5e7eb;
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-cream);
+  font-family: var(--font-body);
+  font-size: 18px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100vh;
+  background: radial-gradient(circle at 25% 15%, #2a2630 0%, var(--color-bg) 55%) fixed;
+}
+
+:focus-visible {
+  outline: 3px dashed var(--color-lav-soft);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+@layer components {
+  /* Botão principal: pílula creme com contorno de tinta, como no site. */
+  .btn-cream {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: var(--color-cream);
+    color: var(--color-ink);
+    font: 22px/1 var(--font-hand);
+    padding: 11px 26px 12px;
+    border-radius: 999px;
+    border: 3px solid var(--color-ink);
+    box-shadow: 0 0 0 3px var(--color-cream), 0 8px 0 3px #00000055;
+    transition: translate 0.25s cubic-bezier(0.3, 1.8, 0.5, 1), rotate 0.25s cubic-bezier(0.3, 1.8, 0.5, 1), box-shadow 0.25s;
+  }
+  .btn-cream:hover:not(:disabled) {
+    translate: 0 -2px;
+    rotate: -1.5deg;
+    box-shadow: 0 0 0 3px var(--color-cream), 0 11px 0 3px #00000055;
+  }
+  .btn-cream:active:not(:disabled) {
+    translate: 0 3px;
+  }
+  .btn-cream:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font: 20px/1 var(--font-hand);
+    color: var(--color-cream-2);
+    padding: 11px 20px 12px;
+    border-radius: 999px;
+    border: 2px solid var(--color-line);
+    transition: border-color 0.25s, color 0.25s;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    border-color: var(--color-cream-2);
+    color: var(--color-cream);
+  }
+  .btn-ghost:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* Cartão escuro com borda suave (painéis). */
+  .gp-panel {
+    background: #252229ee;
+    border: 2px solid #34303a;
+    border-radius: 22px;
+  }
+
+  /* Cartão "template": moldura escura + miolo creme com contorno de tinta. */
+  .gp-frame {
+    background: var(--color-frame);
+    border-radius: 26px;
+    padding: 8px;
+    box-shadow: 0 18px 30px #0006;
+  }
+  .gp-card {
+    background: var(--color-cream);
+    color: var(--color-ink);
+    border: 3px solid var(--color-ink);
+    border-radius: 19px;
+  }
+
+  .gp-input {
+    width: 100%;
+    background: #29262ecc;
+    border: 2px solid var(--color-line);
+    border-radius: 18px;
+    padding: 10px 16px;
+    color: var(--color-cream);
+    font: 20px/1.3 var(--font-body);
+    outline: none;
+    transition: border-color 0.25s, box-shadow 0.25s;
+  }
+  .gp-input::placeholder {
+    color: var(--color-muted);
+  }
+  .gp-input:focus {
+    border-color: var(--color-lav-soft);
+    box-shadow: 0 0 0 4px #8b78f033;
+  }
+
+  .gp-title {
+    font-family: var(--font-hand);
+    line-height: 1;
+  }
 }
 
 .hljs {
   background: transparent;
+}
+code,
+pre {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
 }

@@ -2,6 +2,7 @@ import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireAdmin } from "./authz";
 import { SEED_PRODUCTS } from "./seedData";
+import { productAttributes } from "./schema";
 
 export const get = query({
   args: {},
@@ -24,6 +25,7 @@ const productFields = {
   description: v.string(),
   category: v.string(),
   imageUrl: v.string(),
+  attributes: v.optional(productAttributes),
 };
 
 const validate = (p: { price?: number; stock?: number }) => {
@@ -49,6 +51,7 @@ export const update = mutation({
     description: v.optional(v.string()),
     category: v.optional(v.string()),
     imageUrl: v.optional(v.string()),
+    attributes: v.optional(productAttributes),
   },
   handler: async (ctx, { id, ...rest }) => {
     await requireAdmin(ctx);

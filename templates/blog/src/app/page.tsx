@@ -5,6 +5,7 @@ import { useState } from "react";
 import Link from 'next/link';
 import TeamCards from "@/components/TeamCards";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
+import { SITE } from "@/lib/site";
 
 export default function HomePage() {
   const generateTeam = useAction(api.jikan.generateTeam);
@@ -33,14 +34,14 @@ export default function HomePage() {
       
       {/* HERO SECTION */}
       <div>
-          <h1 style={{ fontSize: '3rem', marginBottom: '10px' }}>BLOG_PESSOAL_AI</h1>
+          <h1 style={{ fontSize: '3rem', marginBottom: '10px' }}>{SITE.copy.heroTitle}</h1>
           <p style={{ margin: '0 auto', maxWidth: '600px', color: 'var(--text-secondary)' }}>
-            Conectando Neural Net (Gemini) à Jikan API para gerar conteúdo otaku automaticamente.
+            {SITE.copy.heroSubtitle}
           </p>
       </div>
 
       <div style={{ display: 'flex', gap: '15px' }}>
-        <Link href="/posts" className="btn">ACESSAR BLOG</Link>
+        <Link href="/posts" className="btn">{SITE.copy.ctaLabel}</Link>
         <Link href="/admin/dashboard" className="btn" style={{ borderColor: 'var(--text-secondary)', color: 'var(--text-secondary)' }}>ADMIN</Link>
       </div>
 
